@@ -73,7 +73,7 @@ sequenceDiagram
     participant S as Streamlit App
     participant E as Extract Module
     participant M as Mistral OCR API
-    participant A as Azure AI Foundry
+    participant A as Microsoft Foundry
 
     U->>S: Upload PDF
     S->>S: Validate file size & format
@@ -412,7 +412,7 @@ def build_pdf(output_path: str = "data/sample_complex_report.pdf") -> None:
         "with a 99.2% accuracy rate on structured content and 97.8% on handwritten annotations."
     )
     pdf.body_text(
-        "The Mistral Document AI model was deployed on Azure AI Foundry in West Europe, processing "
+        "The Mistral Document AI model was deployed on Microsoft Foundry in West Europe, processing "
         "an average of 1,285 documents per day. Table extraction accuracy reached 99.1% on printed "
         "content. The multi-stage classification pipeline achieves an overall F1-score of 0.983 across "
         "10 document types."
@@ -461,7 +461,7 @@ def build_pdf(output_path: str = "data/sample_complex_report.pdf") -> None:
             ["Service Bus", "Standard", "3", "$0.05/msg", "$456.30", "15%", "$387.86", "-12.4%"],
             ["Blob Storage", "Hot", "500GB", "$0.018/GB", "$9.00", "0%", "$9.00", "-8.3%"],
             ["Key Vault", "Standard", "2", "$0.03/op", "$45.60", "0%", "$45.60", "+1.2%"],
-            ["AI Foundry", "S0", "1", "$1.50/1k", "$3,450.00", "20%", "$2,760.00", "-3.8%"],
+            ["Microsoft Foundry", "S0", "1", "$1.50/1k", "$3,450.00", "20%", "$2,760.00", "-3.8%"],
             ["App Insights", "Pay-as-go", "1", "$2.30/GB", "$234.60", "0%", "$234.60", "+5.7%"],
             ["Container Reg", "Basic", "1", "$5.00/day", "$150.00", "0%", "$150.00", "0.0%"],
             ["DNS Zone", "Public", "2", "$0.50/zone", "$1.00", "0%", "$1.00", "0.0%"],
@@ -555,7 +555,7 @@ def build_pdf(output_path: str = "data/sample_complex_report.pdf") -> None:
             ["SERVICEBUS_QUEUE", "Worker", "Terraform", "Queue name (pdf-queue)"],
             ["STORAGE_ACCOUNT", "API + Worker", "Terraform", "Blob storage account name"],
             ["STORAGE_CONTAINER", "API + Worker", "Terraform", "Blob container (attachments)"],
-            ["AI_FOUNDRY_ENDPOINT", "API + Worker", "Terraform", "AI Foundry project endpoint"],
+            ["AI_FOUNDRY_ENDPOINT", "API + Worker", "Terraform", "Microsoft Foundry project endpoint"],
             ["AI_FOUNDRY_KEY", "API + Worker", "Key Vault", "API key (managed identity)"],
             ["MISTRAL_DEPLOYMENT", "Worker", "Terraform", "OCR model deployment name"],
             ["GPT_DEPLOYMENT", "API + Worker", "Terraform", "LLM deployment name"],
@@ -576,7 +576,7 @@ def build_pdf(output_path: str = "data/sample_complex_report.pdf") -> None:
             ["UAMI (worker)", "Cosmos DB Data Contrib", "Cosmos Account", "Read/write docs"],
             ["UAMI (worker)", "Storage Blob Reader", "Storage Account", "Read PDF files"],
             ["UAMI (worker)", "SB Data Receiver", "Service Bus NS", "Dequeue + complete"],
-            ["UAMI (worker)", "Cognitive Svc User", "AI Foundry", "Call OCR + LLM"],
+            ["UAMI (worker)", "Cognitive Svc User", "Microsoft Foundry", "Call OCR + LLM"],
             ["UAMI (both)", "AcrPull", "Container Registry", "Pull images"],
             ["Developers", "KV Secrets User", "Key Vault", "Read secrets"],
         ],

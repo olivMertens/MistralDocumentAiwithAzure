@@ -1,12 +1,12 @@
 # Mistral Document AI - OCR Extraction Demo
 
-Standalone, self-contained project demonstrating **Mistral Document AI** OCR deployed and served through **Microsoft Azure AI Foundry**.
+Standalone, self-contained project demonstrating **Mistral Document AI** OCR deployed and served through **Microsoft Foundry**.
 
-This project leverages **Azure AI Foundry** (formerly Azure AI Services) as the hosting platform to deploy Mistral's Document AI models via the REST API. Both model versions are deployed as **GlobalStandard** SKU endpoints in the same Foundry project.
+This project leverages **Microsoft Foundry** as the hosting platform to deploy Mistral's Document AI models via the REST API. Both model versions are deployed as **GlobalStandard** SKU endpoints in the same Foundry project.
 
 Extract text, tables, and images from PDF documents using Python. Supports both **v25.05** (baseline) and **v25.12** (table_format, header/footer extraction, enhanced annotations).
 
-## Why Azure AI Foundry?
+## Why Microsoft Foundry?
 
 - **Managed deployment** — deploy Mistral models with a single CLI command, no infrastructure to manage
 - **GlobalStandard SKU** — pay-per-token pricing with automatic scaling
@@ -44,11 +44,11 @@ Extract text, tables, and images from PDF documents using Python. Supports both 
 
 > **Note**: `table_format`, `extract_header`, and `extract_footer` parameters are **only available with OCR 2512 or newer** ([source](https://docs.mistral.ai/capabilities/document_ai/basic_ocr)).
 
-### API Limits (Azure AI Foundry)
+### API Limits (Microsoft Foundry)
 
 | Limit | Value | Notes |
 |-------|-------|-------|
-| **Max file size** | **30 MB** per request | Applies to both v25.05 and v25.12 on Azure AI Foundry |
+| **Max file size** | **30 MB** per request | Applies to both v25.05 and v25.12 on Microsoft Foundry |
 | **Max pages per request** | **30 pages** | Documents >30 pages are auto-chunked by this project |
 | **Annotations page limit** | **8 pages** | `document_annotation` processes only the first 8 pages |
 | **Supported input formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | Images count as 1 page |
@@ -65,9 +65,9 @@ Extract text, tables, and images from PDF documents using Python. Supports both 
 - [Document AI — Document Q&A](https://docs.mistral.ai/capabilities/document_ai/document_qna) — question answering on documents
 - [OCR API Reference](https://docs.mistral.ai/api/endpoint/ocr) — REST API endpoint specification
 
-### Azure AI Foundry
+### Microsoft Foundry
 
-- [Azure AI Foundry documentation](https://learn.microsoft.com/azure/ai-services/)
+- [Microsoft Foundry documentation](https://learn.microsoft.com/azure/ai-services/)
 - [Mistral Document AI 2505 — Azure Model Card](https://ai.azure.com/explore/models/mistral-document-ai-2505/version/1/registry/azureml-mistral)
 - [Mistral Document AI 2512 — Azure Model Card](https://ai.azure.com/explore/models/mistral-document-ai-2512/version/1/registry/azureml-mistral)
 
@@ -364,7 +364,7 @@ Documents over 30 pages are automatically split into chunks and processed in seq
 ## Requirements
 
 - Python 3.12+
-- **Microsoft Azure subscription** with an [Azure AI Foundry](https://learn.microsoft.com/azure/ai-services/) account
+- **Microsoft Azure subscription** with a [Microsoft Foundry](https://learn.microsoft.com/azure/ai-services/) account
 - Mistral Document AI models deployed via `scripts/deploy_all.ps1` / `scripts/deploy_all.sh`
 - `az` CLI logged in (`az login`)
 - `uv` package manager (or `pip install -e .`)

@@ -179,7 +179,7 @@ async def ocr_pdf(
 
     Args:
         pdf_path: Path to PDF file.
-        endpoint: Azure AI Foundry endpoint URL.
+        endpoint: Microsoft Foundry endpoint URL.
         deployment: Model deployment name (overrides model_key).
         model_key: Model catalog key ("2505" or "2512"). Ignored if deployment is set.
         api_version: API version string.

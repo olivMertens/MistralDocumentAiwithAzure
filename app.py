@@ -18,7 +18,7 @@ import streamlit as st
 from src.extract import ocr_pdf, OCRResult, MODELS, get_deployment_name, _pydantic_to_mistral_schema, ImageDescription
 
 # ---------------------------------------------------------------------------
-# Upload constraints (Azure AI Foundry limits)
+# Upload constraints (Microsoft Foundry limits)
 # ---------------------------------------------------------------------------
 MAX_FILE_SIZE_MB = 30
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
@@ -29,7 +29,7 @@ def _validate_upload(data: bytes, filename: str) -> str | None:
     if len(data) > MAX_FILE_SIZE_BYTES:
         return (
             f"File too large: {len(data) / (1024 * 1024):.1f} MB "
-            f"(limit: {MAX_FILE_SIZE_MB} MB on Azure AI Foundry)"
+            f"(limit: {MAX_FILE_SIZE_MB} MB on Microsoft Foundry)"
         )
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if ext == 'pdf' and not data[:5].startswith(b'%PDF'):
@@ -185,7 +185,7 @@ endpoint = st.sidebar.text_input(
     "Endpoint",
     value=os.getenv("MISTRAL_ENDPOINT", ""),
     type="default",
-    help="Azure AI Foundry endpoint URL",
+    help="Microsoft Foundry endpoint URL",
 )
 
 # Model selection
@@ -329,7 +329,7 @@ else:
 st.title("Mistral Document AI - OCR Extraction")
 st.markdown(
     f"Upload a PDF or pick one from `data/` to extract text, tables, and images "
-    f"using **Mistral Document AI {MODELS[model_key]['label']}** on Azure AI Foundry."
+    f"using **Mistral Document AI {MODELS[model_key]['label']}** on Microsoft Foundry."
 )
 
 # ---------------------------------------------------------------------------
@@ -362,12 +362,12 @@ with st.expander("\u2139\ufe0f  Model Comparison & API Limits", expanded=False):
 """
     )
 
-    st.markdown("### API Limits (Azure AI Foundry)")
+    st.markdown("### API Limits (Microsoft Foundry)")
     st.markdown(
         """
 | Limit | Value | Notes |
 |-------|-------|-------|
-| **Max file size** | **30 MB** per request | Applies to both v25.05 and v25.12 on Azure AI Foundry |
+| **Max file size** | **30 MB** per request | Applies to both v25.05 and v25.12 on Microsoft Foundry |
 | **Max pages per request** | **30 pages** | Documents >30 pages are auto-chunked by this app |
 | **Annotations page limit** | **8 pages** | `document_annotation` limited to first 8 pages |
 | **Supported formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | Images: 1 page per request |

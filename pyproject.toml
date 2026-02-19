@@ -1,7 +1,7 @@
 [project]
 name = "mistral-document-ai-demo"
 version = "0.1.0"
-description = "Standalone demo: Mistral Document AI OCR via Azure AI Foundry REST API"
+description = "Standalone demo: Mistral Document AI OCR via Microsoft Foundry REST API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
