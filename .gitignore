@@ -1,0 +1,34 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data & extraction outputs
+data/*.pdf
+!data/sample_complex_report.pdf
+extraction/*.md
+extraction/*.json
+extraction/*.csv
+
+# uv
+uv.lock
