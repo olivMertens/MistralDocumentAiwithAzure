@@ -7,6 +7,7 @@ Creates data/sample_complex_report.pdf — a multi-page document with:
 - Mixed text sections and headers
 - Multiple tables with different structures (financial, technical, nested headers)
 - Plot charts (bar, line, pie) rendered as images via matplotlib
+- Mermaid diagrams (flowchart, sequence, class) rendered via mermaid.ink API
 - ASCII art diagrams (architecture, flowchart)
 - Bullet lists and numbered items
 - A dense multi-column table spanning a full page
@@ -14,8 +15,10 @@ Creates data/sample_complex_report.pdf — a multi-page document with:
 
 from __future__ import annotations
 
+import base64
 import io
 import tempfile
+import urllib.request
 from pathlib import Path
 
 import matplotlib
@@ -23,6 +26,93 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 from fpdf import FPDF
+
+
+# ---------------------------------------------------------------------------
+# Mermaid diagram renderer (returns PNG bytes via mermaid.ink)
+# ---------------------------------------------------------------------------
+
+def _render_mermaid(diagram: str) -> bytes | None:
+    """Render a Mermaid diagram to PNG via the mermaid.ink public API."""
+    encoded = base64.urlsafe_b64encode(diagram.encode()).decode()
+    url = f"https://mermaid.ink/img/{encoded}?type=png"
+    try:
+        req = urllib.request.Request(url, headers={
+            "Accept": "image/png",
+            "User-Agent": "Mozilla/5.0 (MistralDocAI/1.0)",
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read()
+    except Exception as exc:
+        print(f"  Warning: Mermaid rendering failed ({exc}), skipping diagram.")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Mermaid diagram definitions
+# ---------------------------------------------------------------------------
+
+MERMAID_FLOWCHART = """
+flowchart TD
+    A[Upload PDF] --> B{File Valid?}
+    B -->|Yes| C[Split into Chunks]
+    B -->|No| D[Return Error]
+    C --> E[Send to Mistral OCR API]
+    E --> F[Parse Response]
+    F --> G{Has Tables?}
+    G -->|Yes| H[Extract Tables]
+    G -->|No| I[Markdown Only]
+    H --> J[Merge Results]
+    I --> J
+    J --> K[Return OCRResult]
+"""
+
+MERMAID_SEQUENCE = """
+sequenceDiagram
+    participant U as User
+    participant S as Streamlit App
+    participant E as Extract Module
+    participant M as Mistral OCR API
+    participant A as Azure AI Foundry
+
+    U->>S: Upload PDF
+    S->>S: Validate file size & format
+    S->>E: ocr_pdf(file_bytes, model)
+    E->>E: Split PDF into 30-page chunks
+    loop Each Chunk
+        E->>M: POST /ocr (base64 PDF)
+        M->>A: Forward to model deployment
+        A-->>M: OCR response (markdown + images)
+        M-->>E: JSON response
+    end
+    E->>E: Merge chunk results
+    E-->>S: OCRResult
+    S->>S: Render tabs (Markdown, Tables, Images)
+    S-->>U: Display results
+"""
+
+MERMAID_CLASS = """
+classDiagram
+    class OCRResult {
+        +List~OCRPage~ pages
+        +str model
+        +float total_time
+        +to_markdown() str
+    }
+    class OCRPage {
+        +int index
+        +str markdown
+        +List~ImageDescription~ images
+        +Dict dimensions
+    }
+    class ImageDescription {
+        +str id
+        +str base64
+        +str description
+    }
+    OCRResult --> OCRPage : contains
+    OCRPage --> ImageDescription : contains
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -266,17 +356,16 @@ class ReportPDF(FPDF):
 
     def add_chart_image(self, png_bytes: bytes, w: float = 140):
         """Insert a matplotlib chart rendered as PNG."""
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            f.write(png_bytes)
-            f.flush()
-            self.image(f.name, x=self.get_x(), y=self.get_y(), w=w)
-            # Estimate height to advance cursor
-            from PIL import Image as PILImage
-            img = PILImage.open(io.BytesIO(png_bytes))
-            aspect = img.height / img.width
-            h = w * aspect
-            self.set_y(self.get_y() + h + 4)
-            Path(f.name).unlink(missing_ok=True)
+        tmp = Path(tempfile.mktemp(suffix=".png"))
+        tmp.write_bytes(png_bytes)
+        self.image(str(tmp), x=self.get_x(), y=self.get_y(), w=w)
+        # Compute height from aspect ratio to advance cursor
+        from PIL import Image as PILImage
+        img = PILImage.open(io.BytesIO(png_bytes))
+        aspect = img.height / img.width
+        h = w * aspect
+        self.set_y(self.get_y() + h + 4)
+        tmp.unlink(missing_ok=True)
 
     def add_ascii_block(self, title: str, text: str, font_size: float = 6):
         """Insert a monospaced ASCII art block with a light background."""
@@ -545,11 +634,81 @@ def build_pdf(output_path: str = "data/sample_complex_report.pdf") -> None:
         [30, 28, 28, 28, 22, 28],
     )
 
+    # ===== PAGE 6 — Charts (plot images) =====
+    pdf.add_page()
+    pdf.section_title("Appendix B: Visual Analytics")
+
+    pdf.body_text("Figure 1: Infrastructure Cost by Azure Region")
+    pdf.add_chart_image(_chart_bar_regions(), w=150)
+
+    pdf.body_text("Figure 2: OCR Accuracy Trend (H1 2025)")
+    pdf.add_chart_image(_chart_line_accuracy(), w=150)
+
+    # ===== PAGE 7 — More charts =====
+    pdf.add_page()
+
+    pdf.body_text("Figure 3: Document Type Distribution")
+    pdf.add_chart_image(_chart_pie_documents(), w=130)
+
+    pdf.body_text("Figure 4: Monthly Token Usage by Model")
+    pdf.add_chart_image(_chart_stacked_bar_tokens(), w=120)
+
+    # ===== PAGE 8 — Mermaid diagrams =====
+    pdf.add_page()
+    pdf.section_title("Appendix C: Mermaid Diagrams")
+
+    pdf.body_text("Figure 5: Document Processing Flowchart (Mermaid)")
+    png = _render_mermaid(MERMAID_FLOWCHART)
+    if png:
+        pdf.add_chart_image(png, w=140)
+    else:
+        pdf.body_text("[Mermaid diagram could not be rendered - internet required]")
+
+    pdf.body_text("Figure 6: API Sequence Diagram (Mermaid)")
+    png = _render_mermaid(MERMAID_SEQUENCE)
+    if png:
+        pdf.add_chart_image(png, w=160)
+    else:
+        pdf.body_text("[Mermaid diagram could not be rendered - internet required]")
+
+    # ===== PAGE 9 — More Mermaid + class diagram =====
+    pdf.add_page()
+
+    pdf.body_text("Figure 7: Data Model Class Diagram (Mermaid)")
+    png = _render_mermaid(MERMAID_CLASS)
+    if png:
+        pdf.add_chart_image(png, w=140)
+    else:
+        pdf.body_text("[Mermaid diagram could not be rendered - internet required]")
+    pdf.ln(4)
+
+    # ===== PAGE 10 — ASCII art diagrams =====
+    pdf.add_page()
+    pdf.section_title("Appendix D: Architecture Diagrams (ASCII)")
+
+    pdf.add_ascii_block("Architecture Overview", ASCII_ARCHITECTURE, font_size=6)
+    pdf.ln(4)
+
+    pdf.add_ascii_block("Processing Flowchart", ASCII_FLOWCHART, font_size=5.5)
+
+    # ===== PAGE 9 — ASCII logo + summary =====
+    pdf.add_page()
+    pdf.add_ascii_block("Mistral Document AI - ASCII Art Logo", ASCII_LOGO, font_size=7)
+    pdf.ln(6)
+
+    pdf.section_title("End of Report")
+    pdf.body_text(
+        "This document was generated as a test artifact for the Mistral Document AI OCR demo. "
+        "It contains tables, charts, Mermaid diagrams, and ASCII art to exercise v25.12 "
+        "features such as chart-to-table extraction, image recognition, table_format options, "
+        "and annotations."
+    )
+
     # Save
-    from pathlib import Path
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     pdf.output(output_path)
-    print(f"Generated: {output_path} (5 pages, 11 tables)")
+    n_pages = pdf.pages_count
+    print(f"Generated: {output_path} ({n_pages} pages — tables, charts, Mermaid diagrams, ASCII art)")
 
 
 if __name__ == "__main__":
