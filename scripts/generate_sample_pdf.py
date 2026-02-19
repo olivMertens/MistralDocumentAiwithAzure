@@ -1,4 +1,4 @@
-"""Generate a complex sample PDF with multiple tables for OCR demo.
+"""Generate a complex sample PDF with tables, charts, and images for OCR demo.
 
 Usage:
     uv run python scripts/generate_sample_pdf.py
@@ -6,13 +6,211 @@ Usage:
 Creates data/sample_complex_report.pdf — a multi-page document with:
 - Mixed text sections and headers
 - Multiple tables with different structures (financial, technical, nested headers)
+- Plot charts (bar, line, pie) rendered as images via matplotlib
+- ASCII art diagrams (architecture, flowchart)
 - Bullet lists and numbered items
 - A dense multi-column table spanning a full page
 """
 
 from __future__ import annotations
 
+import io
+import tempfile
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 from fpdf import FPDF
+
+
+# ---------------------------------------------------------------------------
+# Chart generators (return PNG bytes)
+# ---------------------------------------------------------------------------
+
+def _chart_bar_regions() -> bytes:
+    """Bar chart: monthly cost by Azure region."""
+    regions = ["West EU", "North EU", "East US", "SE Asia", "AU East", "UK South"]
+    costs = [2340, 1120, 1950, 380, 1080, 920]
+    colors = ["#0078d4", "#50e6ff", "#00bcf2", "#b4ec51", "#ffaa44", "#d83b01"]
+
+    fig, ax = plt.subplots(figsize=(5.5, 3))
+    bars = ax.bar(regions, costs, color=colors, edgecolor="white", linewidth=0.5)
+    ax.set_ylabel("Monthly Cost ($)")
+    ax.set_title("Infrastructure Cost by Azure Region", fontsize=11, fontweight="bold")
+    ax.yaxis.set_major_formatter(mticker.StrMethodFormatter("${x:,.0f}"))
+    for bar, v in zip(bars, costs):
+        ax.text(bar.get_x() + bar.get_width() / 2, v + 40, f"${v:,}", ha="center", va="bottom", fontsize=7)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def _chart_line_accuracy() -> bytes:
+    """Line chart: OCR accuracy trend over 6 months."""
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+    printed = [99.0, 99.1, 99.2, 99.2, 99.3, 99.2]
+    handwritten = [96.5, 96.8, 97.1, 97.4, 97.6, 97.8]
+    tables = [98.5, 98.7, 98.8, 98.9, 99.0, 99.1]
+
+    fig, ax = plt.subplots(figsize=(5.5, 3))
+    ax.plot(months, printed, "o-", label="Printed", color="#0078d4", linewidth=2)
+    ax.plot(months, handwritten, "s-", label="Handwritten", color="#d83b01", linewidth=2)
+    ax.plot(months, tables, "^-", label="Tables", color="#107c10", linewidth=2)
+    ax.set_ylabel("Accuracy (%)")
+    ax.set_title("OCR Accuracy Trend (H1 2025)", fontsize=11, fontweight="bold")
+    ax.set_ylim(95.5, 100)
+    ax.legend(fontsize=8, loc="lower right")
+    ax.grid(axis="y", alpha=0.3)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def _chart_pie_documents() -> bytes:
+    """Pie chart: document type distribution."""
+    labels = ["Invoice", "Purchase Order", "Delivery Note", "Contract",
+              "Tax Document", "Bank Statement", "Correspondence", "Other"]
+    sizes = [2345, 1890, 1456, 987, 1234, 876, 2430, 1629]
+    colors = ["#0078d4", "#50e6ff", "#00bcf2", "#b4ec51",
+              "#ffaa44", "#d83b01", "#8661c5", "#cccccc"]
+    explode = [0.04] * len(labels)
+
+    fig, ax = plt.subplots(figsize=(5, 3.5))
+    wedges, texts, autotexts = ax.pie(
+        sizes, labels=labels, colors=colors, explode=explode,
+        autopct="%1.1f%%", startangle=140, pctdistance=0.8,
+        textprops={"fontsize": 7},
+    )
+    for t in autotexts:
+        t.set_fontsize(6)
+    ax.set_title("Document Type Distribution (12,847 docs)", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def _chart_stacked_bar_tokens() -> bytes:
+    """Stacked bar chart: token usage by model."""
+    models = ["Mistral Doc AI", "GPT-4.1-mini", "GPT-4.1-nano"]
+    input_tok = [8.23, 3.46, 1.23]
+    output_tok = [2.15, 0.89, 0.35]
+
+    fig, ax = plt.subplots(figsize=(4.5, 3))
+    x = range(len(models))
+    ax.bar(x, input_tok, label="Input Tokens", color="#0078d4")
+    ax.bar(x, output_tok, bottom=input_tok, label="Output Tokens", color="#50e6ff")
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, fontsize=8)
+    ax.set_ylabel("Millions of Tokens")
+    ax.set_title("Monthly Token Usage by Model", fontsize=11, fontweight="bold")
+    ax.legend(fontsize=8)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# ASCII art strings
+# ---------------------------------------------------------------------------
+
+ASCII_ARCHITECTURE = """\
++---------------------------------------------------------------------+
+|                   DOCUMENT PROCESSING PIPELINE                      |
++---------------------------------------------------------------------+
+|                                                                     |
+|   +----------+     +-----------+     +------------+     +--------+  |
+|   |  Upload  | --> |  Mistral  | --> |  Classify  | --> | Store  |  |
+|   |  (Blob)  |     | Doc AI    |     | (GPT-4.1)  |     |(Cosmos)|  |
+|   +----------+     +-----------+     +------------+     +--------+  |
+|        |                |                  |                |       |
+|        v                v                  v                v       |
+|   +---------+     +-----------+     +------------+     +--------+  |
+|   |  Queue  |     |  Extract  |     |  Annotate  |     | Index  |  |
+|   | (SvcBus)|     |  Tables   |     |  (BBox)    |     |(Search)|  |
+|   +---------+     +-----------+     +------------+     +--------+  |
+|                                                                     |
++---------------------------------------------------------------------+
+"""
+
+ASCII_FLOWCHART = """\
+          START
+            |
+            v
+    +---------------+
+    | Receive PDF   |
+    +-------+-------+
+            |
+            v
+    +---------------+       +------------------+
+    | Pages <= 30?  |--No-->| Split into chunks|
+    +-------+-------+       +--------+---------+
+            |                        |
+           Yes                       |
+            |                        v
+            +<-----------------------+
+            |
+            v
+    +------------------+
+    | Call Mistral OCR  |
+    | (REST API)       |
+    +--------+---------+
+            |
+            v
+    +------------------+
+    | Parse response   |
+    | - markdown       |
+    | - tables         |
+    | - images         |
+    +--------+---------+
+            |
+            v
+    +------------------+        +------------------+
+    | Annotations?     |--Yes-->| Apply JSON Schema|
+    +--------+---------+        +--------+---------+
+            |                            |
+            No                           |
+            |                            v
+            +<---------------------------+
+            |
+            v
+    +------------------+
+    | Return OCRResult |
+    +------------------+
+            |
+            v
+          END
+"""
+
+ASCII_LOGO = """\
+ __  __ _     _             _
+|  \\/  (_)___| |_ _ __ __ _| |
+| |\\/| | / __| __| '__/ _` | |
+| |  | | \\__ \\ |_| | | (_| | |
+|_|  |_|_|___/\\__|_|  \\__,_|_|
+     ____                     _
+    |  _ \\  ___   ___   _   _| |_ __ _ _
+    | | | |/ _ \\ / __| | | | | __/ _` (_)
+    | |_| | (_) | (__  | |_| | || (_| |_
+    |____/ \\___/ \\___|  \\__,_|\\__\\__,_(_)
+         _    ___
+        / \\  |_ _|
+       / _ \\  | |
+      / ___ \\ | |
+     /_/   \\_\\___|
+"""
 
 
 class ReportPDF(FPDF):
@@ -65,6 +263,41 @@ class ReportPDF(FPDF):
                 self.cell(w, row_h, cell, border=1, fill=fill)
             self.ln(row_h)
         self.ln(3)
+
+    def add_chart_image(self, png_bytes: bytes, w: float = 140):
+        """Insert a matplotlib chart rendered as PNG."""
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(png_bytes)
+            f.flush()
+            self.image(f.name, x=self.get_x(), y=self.get_y(), w=w)
+            # Estimate height to advance cursor
+            from PIL import Image as PILImage
+            img = PILImage.open(io.BytesIO(png_bytes))
+            aspect = img.height / img.width
+            h = w * aspect
+            self.set_y(self.get_y() + h + 4)
+            Path(f.name).unlink(missing_ok=True)
+
+    def add_ascii_block(self, title: str, text: str, font_size: float = 6):
+        """Insert a monospaced ASCII art block with a light background."""
+        self.sub_title(title)
+        self.set_font("Courier", "", font_size)
+        self.set_fill_color(240, 240, 248)
+        self.set_draw_color(180, 180, 200)
+
+        lines = text.strip().split("\n")
+        line_h = font_size * 0.5 + 1
+        block_h = line_h * len(lines) + 4
+        block_w = 190
+
+        # Background rect
+        y0 = self.get_y()
+        self.rect(self.l_margin, y0, block_w, block_h, style="DF")
+        self.set_y(y0 + 2)
+
+        for line in lines:
+            self.cell(block_w, line_h, line, new_x="LMARGIN", new_y="NEXT")
+        self.ln(4)
 
 
 def build_pdf(output_path: str = "data/sample_complex_report.pdf") -> None:

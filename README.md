@@ -141,16 +141,20 @@ cp .env.example .env
 ### 3. Install Dependencies
 
 ```bash
-uv sync
+uv venv --python 3.12           # create a virtual environment with Python 3.12
+# On Windows:  .venv\Scripts\activate
+# On Linux/macOS:  source .venv/bin/activate
+uv sync                          # install all dependencies
 ```
 
 ### 4. Generate Sample PDF (Optional)
 
 ```bash
+uv sync --group scripts          # installs matplotlib for chart generation
 uv run python scripts/generate_sample_pdf.py
 ```
 
-Creates `data/sample_complex_report.pdf` - a 5-page document with 11 tables covering financial data, SLA matrices, classification results, infrastructure config, and OCR performance metrics.
+Creates `data/sample_complex_report.pdf` — a multi-page document with tables, plot charts (bar, line, pie), ASCII art diagrams, and mixed text sections.
 
 ### 5. Extract PDFs (CLI)
 

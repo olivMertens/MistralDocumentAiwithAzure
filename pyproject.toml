@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 notebook = ["jupyterlab>=4.0", "ipykernel>=6.0"]
+scripts = ["matplotlib>=3.8"]
 
 [project.scripts]
 extract = "src.extract:main"
