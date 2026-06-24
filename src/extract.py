@@ -12,6 +12,7 @@ from pathlib import Path
 
 import httpx
 from collections.abc import Callable
+from typing import Any
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,11 @@ class OCRPage(BaseModel):
     header: str | None = None
     footer: str | None = None
     dimensions: dict = {}
+    # OCR 4.0 extras: paragraph-level block classification (with bounding boxes)
+    # and inline confidence scores. Returned as null by older models (v25.12) and
+    # by OCR 4.0 unless the corresponding extraction options are requested.
+    blocks: list[dict] = []
+    confidence_scores: Any | None = None
 
 
 class OCRResult(BaseModel):
@@ -57,12 +63,12 @@ class OCRResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 MODELS: dict[str, dict] = {
-    "2505": {
-        "label": "v25.05",
-        "description": "Mistral Document AI (May 2025) - baseline OCR",
-        "env_var": "MISTRAL_DEPLOYMENT",
-        "default_deployment": "mistral-document-ai-2505",
-        "version": "25.05",
+    "ocr4": {
+        "label": "OCR 4.0",
+        "description": "Mistral OCR 4 (Preview) - bounding boxes, block classification, confidence scores",
+        "env_var": "MISTRAL_DEPLOYMENT_OCR4",
+        "default_deployment": "mistral-ocr-4-0",
+        "version": "4.0",
     },
     "2512": {
         "label": "v25.12",
@@ -74,7 +80,7 @@ MODELS: dict[str, dict] = {
 }
 
 
-def get_deployment_name(model_key: str = "2505") -> str:
+def get_deployment_name(model_key: str = "ocr4") -> str:
     """Resolve deployment name from model key via env var or default."""
     info = MODELS.get(model_key)
     if not info:
@@ -162,12 +168,15 @@ async def ocr_pdf(
     api_key: str | None = None,
     include_images: bool = False,
     max_retries: int = 3,
-    # v25.12 features
+    # Advanced features (v25.12 / OCR 4.0)
     table_format: str | None = None,
     extract_header: bool = False,
     extract_footer: bool = False,
     pages: list[int] | None = None,
     image_limit: int | None = None,
+    # OCR 4.0 only
+    include_blocks: bool = False,
+    confidence_scores_granularity: str | None = None,
     # Annotations
     bbox_annotation_format: dict | None = None,
     document_annotation_format: dict | None = None,
@@ -181,16 +190,22 @@ async def ocr_pdf(
         pdf_path: Path to PDF file.
         endpoint: Microsoft Foundry endpoint URL.
         deployment: Model deployment name (overrides model_key).
-        model_key: Model catalog key ("2505" or "2512"). Ignored if deployment is set.
+        model_key: Model catalog key ("ocr4" or "2512"). Ignored if deployment is set.
         api_version: API version string.
         api_key: Optional API key (uses DefaultAzureCredential if empty).
         include_images: Request base64 image data in response.
         max_retries: Number of retries on transient failures.
-        table_format: "markdown", "html", or None (v25.12+).
-        extract_header: Extract page headers (v25.12+).
-        extract_footer: Extract page footers (v25.12+).
+        table_format: "markdown", "html", or None (v25.12 / OCR 4.0).
+        extract_header: Extract page headers (v25.12 / OCR 4.0).
+        extract_footer: Extract page footers (v25.12 / OCR 4.0).
         pages: List of 0-based page indices to process.
         image_limit: Maximum number of images to return.
+        include_blocks: OCR 4.0 only. Return paragraph-level content blocks with
+            bounding boxes and type classification (title, paragraph, table,
+            equation, signature, ...). Populates ``OCRPage.blocks``.
+        confidence_scores_granularity: OCR 4.0 only. "word" or "page" — return
+            inline confidence scores at the requested granularity. Populates
+            ``OCRPage.confidence_scores``.
         bbox_annotation_format: JSON-schema dict for per-image structured annotations.
         document_annotation_format: JSON-schema dict for whole-document annotation.
         document_annotation_prompt: Prompt for document-level annotation.
@@ -204,7 +219,7 @@ async def ocr_pdf(
     elif model_key:
         resolved_deployment = get_deployment_name(model_key)
     else:
-        resolved_deployment = os.getenv("MISTRAL_DEPLOYMENT", "mistral-document-ai-2505")
+        resolved_deployment = os.getenv("MISTRAL_DEPLOYMENT", "mistral-ocr-4-0")
     api_version = api_version or os.getenv("MISTRAL_API_VERSION", "2024-05-01-preview")
     api_key = api_key or os.getenv("AZURE_AI_KEY", "")
 
@@ -245,7 +260,7 @@ async def ocr_pdf(
             },
             "include_image_base64": include_images,
         }
-        # v25.12 features
+        # Advanced features (v25.12 / OCR 4.0)
         if table_format:
             payload["table_format"] = table_format
         if extract_header:
@@ -256,6 +271,11 @@ async def ocr_pdf(
             payload["pages"] = pages
         if image_limit is not None:
             payload["image_limit"] = image_limit
+        # OCR 4.0 only: block classification / bounding boxes + confidence scores
+        if include_blocks:
+            payload["include_blocks"] = True
+        if confidence_scores_granularity:
+            payload["confidence_scores_granularity"] = confidence_scores_granularity
         # Annotations
         if bbox_annotation_format:
             payload["bbox_annotation_format"] = bbox_annotation_format
@@ -315,6 +335,8 @@ async def ocr_pdf(
                             header=page.get("header"),
                             footer=page.get("footer"),
                             dimensions=page.get("dimensions", {}),
+                            blocks=page.get("blocks") or [],
+                            confidence_scores=page.get("confidence_scores"),
                         ))
                         for img in imgs:
                             img["page_index"] = global_idx

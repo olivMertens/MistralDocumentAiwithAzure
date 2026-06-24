@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Deploy both Mistral Document AI models (v25.05 + v25.12) and auto-generate .env.
+# Deploy both Mistral Document AI models (v25.12 + OCR 4.0) and auto-generate .env.
 #
 # Usage:
 #   ./scripts/deploy_all.sh --account-name "my-ai-foundry" --resource-group "rg-demo"
 #
 # Requires: az CLI logged in with sufficient permissions.
+# Note: mistral-ocr-4-0 is Preview and requires a GlobalStandard deployment.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,6 +62,7 @@ deploy_model() {
     local deploy_name="$1"
     local model_name="$2"
     local model_version="$3"
+    local model_format="${4:-Mistral AI}"
 
     echo -e "\n  --- $deploy_name ---"
     EXISTING=$(az cognitiveservices account deployment show \
@@ -79,15 +81,15 @@ deploy_model() {
             --deployment-name "$deploy_name" \
             --model-name "$model_name" \
             --model-version "$model_version" \
-            --model-format "Mistral" \
+            --model-format "$model_format" \
             --sku-name "GlobalStandard" \
             --sku-capacity "$CAPACITY"
         echo "    Created!"
     fi
 }
 
-deploy_model "mistral-document-ai-2505" "mistral-document-ai-2505" "25.05"
-deploy_model "mistral-document-ai-2512" "mistral-document-ai-2512" "25.12"
+deploy_model "mistral-document-ai-2512" "mistral-document-ai-2512" "1" "Mistral AI"
+deploy_model "mistral-ocr-4-0" "mistral-ocr-4-0" "1" "Mistral AI"
 
 # 4. Get API key and write .env
 echo -e "\n[4/4] Writing .env file..."
@@ -103,7 +105,7 @@ cat > "$ENV_FILE" <<EOF
 MISTRAL_ENDPOINT=$ENDPOINT
 
 # Model deployments
-MISTRAL_DEPLOYMENT=mistral-document-ai-2505
+MISTRAL_DEPLOYMENT_OCR4=mistral-ocr-4-0
 MISTRAL_DEPLOYMENT_2512=mistral-document-ai-2512
 
 # API version

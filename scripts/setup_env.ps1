@@ -61,15 +61,15 @@ $deployments = az cognitiveservices account deployment list `
     --resource-group $ResourceGroup `
     --output json 2>$null | ConvertFrom-Json
 
-$deployment2505 = ""
+$deploymentOcr4 = ""
 $deployment2512 = ""
 
 foreach ($dep in $deployments) {
     $modelName = $dep.properties.model.name
     $depName = $dep.name
-    if ($modelName -like "*2505*" -or $depName -like "*2505*") {
-        $deployment2505 = $depName
-        Write-Host "  Found v25.05: $depName ($modelName v$($dep.properties.model.version))" -ForegroundColor Green
+    if ($modelName -like "*ocr-4*" -or $modelName -like "*ocr4*" -or $depName -like "*ocr-4*" -or $depName -like "*ocr4*") {
+        $deploymentOcr4 = $depName
+        Write-Host "  Found OCR 4.0: $depName ($modelName v$($dep.properties.model.version))" -ForegroundColor Green
     }
     if ($modelName -like "*2512*" -or $depName -like "*2512*") {
         $deployment2512 = $depName
@@ -77,10 +77,10 @@ foreach ($dep in $deployments) {
     }
 }
 
-if (-not $deployment2505) {
-    Write-Host "  WARNING: No v25.05 deployment found. Using default name 'mistral-document-ai-2505'." -ForegroundColor Yellow
+if (-not $deploymentOcr4) {
+    Write-Host "  WARNING: No OCR 4.0 deployment found. Using default name 'mistral-ocr-4-0'." -ForegroundColor Yellow
     Write-Host "  Run .\scripts\deploy_all.ps1 to deploy it." -ForegroundColor Yellow
-    $deployment2505 = "mistral-document-ai-2505"
+    $deploymentOcr4 = "mistral-ocr-4-0"
 }
 if (-not $deployment2512) {
     Write-Host "  WARNING: No v25.12 deployment found. Using default name 'mistral-document-ai-2512'." -ForegroundColor Yellow
@@ -115,7 +115,7 @@ $envContent = @"
 MISTRAL_ENDPOINT=$endpoint
 
 # Deployment names (discovered from Microsoft Foundry)
-MISTRAL_DEPLOYMENT=$deployment2505
+MISTRAL_DEPLOYMENT_OCR4=$deploymentOcr4
 MISTRAL_DEPLOYMENT_2512=$deployment2512
 
 # API version for Mistral Document AI
@@ -134,7 +134,7 @@ Write-Host "`n.env written: $envPath" -ForegroundColor Green
 # Summary
 Write-Host "`n=== .env Summary ===" -ForegroundColor Cyan
 Write-Host "  MISTRAL_ENDPOINT       = $endpoint"
-Write-Host "  MISTRAL_DEPLOYMENT     = $deployment2505"
+Write-Host "  MISTRAL_DEPLOYMENT_OCR4= $deploymentOcr4"
 Write-Host "  MISTRAL_DEPLOYMENT_2512= $deployment2512"
 Write-Host "  MISTRAL_API_VERSION    = 2024-05-01-preview"
 if ($apiKey) {

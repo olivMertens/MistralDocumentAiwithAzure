@@ -67,24 +67,24 @@ DEPLOYMENTS_JSON=$(az cognitiveservices account deployment list \
     --resource-group "$RESOURCE_GROUP" \
     --output json 2>/dev/null)
 
-DEPLOYMENT_2505=""
+DEPLOYMENT_OCR4=""
 DEPLOYMENT_2512=""
 
 if command -v jq &>/dev/null; then
-    DEPLOYMENT_2505=$(echo "$DEPLOYMENTS_JSON" | jq -r '[.[] | select(.name | contains("2505")) | .name] | first // empty')
+    DEPLOYMENT_OCR4=$(echo "$DEPLOYMENTS_JSON" | jq -r '[.[] | select((.name | test("ocr-?4"; "i"))) | .name] | first // empty')
     DEPLOYMENT_2512=$(echo "$DEPLOYMENTS_JSON" | jq -r '[.[] | select(.name | contains("2512")) | .name] | first // empty')
 else
     # Fallback: parse with grep
-    DEPLOYMENT_2505=$(echo "$DEPLOYMENTS_JSON" | grep -oP '"name"\s*:\s*"[^"]*2505[^"]*"' | head -1 | grep -oP '(?<=")[^"]*2505[^"]*(?=")' || true)
+    DEPLOYMENT_OCR4=$(echo "$DEPLOYMENTS_JSON" | grep -oiP '"name"\s*:\s*"[^"]*ocr-?4[^"]*"' | head -1 | grep -oiP '(?<=")[^"]*ocr-?4[^"]*(?=")' || true)
     DEPLOYMENT_2512=$(echo "$DEPLOYMENTS_JSON" | grep -oP '"name"\s*:\s*"[^"]*2512[^"]*"' | head -1 | grep -oP '(?<=")[^"]*2512[^"]*(?=")' || true)
 fi
 
-if [[ -n "$DEPLOYMENT_2505" ]]; then
-    echo "  Found v25.05: $DEPLOYMENT_2505"
+if [[ -n "$DEPLOYMENT_OCR4" ]]; then
+    echo "  Found OCR 4.0: $DEPLOYMENT_OCR4"
 else
-    echo "  WARNING: No v25.05 deployment found. Using default name 'mistral-document-ai-2505'."
+    echo "  WARNING: No OCR 4.0 deployment found. Using default name 'mistral-ocr-4-0'."
     echo "  Run ./scripts/deploy_all.sh to deploy it."
-    DEPLOYMENT_2505="mistral-document-ai-2505"
+    DEPLOYMENT_OCR4="mistral-ocr-4-0"
 fi
 
 if [[ -n "$DEPLOYMENT_2512" ]]; then
@@ -120,7 +120,7 @@ cat > "$ENV_FILE" <<EOF
 MISTRAL_ENDPOINT=$ENDPOINT
 
 # Deployment names (discovered from Microsoft Foundry)
-MISTRAL_DEPLOYMENT=$DEPLOYMENT_2505
+MISTRAL_DEPLOYMENT_OCR4=$DEPLOYMENT_OCR4
 MISTRAL_DEPLOYMENT_2512=$DEPLOYMENT_2512
 
 # API version for Mistral Document AI
@@ -137,7 +137,7 @@ echo -e "\n.env written: $ENV_FILE"
 # Summary
 echo -e "\n=== .env Summary ==="
 echo "  MISTRAL_ENDPOINT       = $ENDPOINT"
-echo "  MISTRAL_DEPLOYMENT     = $DEPLOYMENT_2505"
+echo "  MISTRAL_DEPLOYMENT_OCR4= $DEPLOYMENT_OCR4"
 echo "  MISTRAL_DEPLOYMENT_2512= $DEPLOYMENT_2512"
 echo "  MISTRAL_API_VERSION    = 2024-05-01-preview"
 if [[ -n "$API_KEY" ]]; then

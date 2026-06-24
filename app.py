@@ -194,7 +194,7 @@ model_key = st.sidebar.radio(
     "Model version",
     options=list(MODELS.keys()),
     format_func=lambda k: MODELS[k]["label"],
-    help="v25.12 adds table_format, header/footer extraction",
+    help="OCR 4.0 and v25.12 add table_format, header/footer extraction",
 )
 resolved_deployment = get_deployment_name(model_key)
 st.sidebar.caption(f"Deployment: `{resolved_deployment}`")
@@ -207,16 +207,16 @@ api_key = st.sidebar.text_input(
 )
 include_images = st.sidebar.checkbox("Include image extraction", value=True)
 
-# v25.12 feature controls
+# Advanced feature controls (v25.12 / OCR 4.0)
 st.sidebar.markdown("---")
-st.sidebar.markdown("### v25.12 Features")
-is_v2512 = model_key == "2512"
+st.sidebar.markdown("### Advanced Features")
+supports_advanced = model_key in ("2512", "ocr4")
 table_format = st.sidebar.selectbox(
     "Table format",
     options=["(none)", "markdown", "html"],
-    disabled=not is_v2512,
+    disabled=not supports_advanced,
     help=(
-        "Controls how tables are returned in the API response (v25.12 only).\n\n"
+        "Controls how tables are returned in the API response (v25.12 / OCR 4.0).\n\n"
         "- **(none)**: tables are embedded inline in the page markdown only.\n"
         "- **markdown**: tables are also returned as separate entries in `pages[].tables[]` "
         "with a `markdown` key — easier for programmatic extraction.\n"
@@ -227,7 +227,7 @@ table_format = st.sidebar.selectbox(
 table_format_val = None if table_format == "(none)" else table_format
 extract_header = st.sidebar.checkbox(
     "Extract headers",
-    disabled=not is_v2512,
+    disabled=not supports_advanced,
     help=(
         "Extract repeated header text from the top of each page "
         "(e.g. document title, chapter name). Returned in `pages[].header`."
@@ -235,7 +235,7 @@ extract_header = st.sidebar.checkbox(
 )
 extract_footer = st.sidebar.checkbox(
     "Extract footers",
-    disabled=not is_v2512,
+    disabled=not supports_advanced,
     help=(
         "Extract repeated footer text from the bottom of each page "
         "(e.g. page numbers, disclaimers). Returned in `pages[].footer`."
@@ -243,26 +243,53 @@ extract_footer = st.sidebar.checkbox(
 )
 pages_input = st.sidebar.text_input(
     "Pages (e.g. 1, 3, 5-8)",
-    disabled=not is_v2512,
+    disabled=not supports_advanced,
     help=(
         "Select specific pages to extract (1-indexed, comma-separated, ranges allowed). "
         "Leave empty to process all pages. Useful for large documents where you only "
-        "need certain sections. v25.12 only."
+        "need certain sections. v25.12 / OCR 4.0."
     ),
 )
 image_limit = st.sidebar.number_input(
     "Image limit",
     min_value=0,
     value=0,
-    disabled=not is_v2512,
+    disabled=not supports_advanced,
     help=(
         "Maximum number of images to return across all pages. "
         "Set to 0 for unlimited. Useful to reduce response size "
-        "when you only need text/tables. v25.12 only."
+        "when you only need text/tables. v25.12 / OCR 4.0."
     ),
 )
-if not is_v2512:
-    st.sidebar.caption("\u2139\ufe0f Select v25.12 to enable these features.")
+is_ocr4 = model_key == "ocr4"
+if is_ocr4:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### OCR 4.0 features")
+    st.sidebar.caption(
+        "\u2728 OCR 4.0 adds paragraph bounding boxes, block classification, "
+        "and inline confidence scores."
+    )
+include_blocks = st.sidebar.checkbox(
+    "Content blocks + bounding boxes",
+    value=False,
+    disabled=not is_ocr4,
+    help=(
+        "OCR 4.0 only. Return paragraph-level content blocks with bounding boxes and "
+        "type classification (title, paragraph, table, equation, signature, \u2026). "
+        "Great for semantic chunking (RAG), citations, and layout-aware pipelines."
+    ),
+)
+confidence_granularity = st.sidebar.selectbox(
+    "Confidence scores",
+    options=["off", "page", "word"],
+    index=0,
+    disabled=not is_ocr4,
+    help=(
+        "OCR 4.0 only. Return inline confidence scores per page or per word. "
+        "Useful for human-in-the-loop QA and automated error flagging. "
+        "'word' is the most detailed (and the largest response)."
+    ),
+)
 
 # Annotation controls
 st.sidebar.markdown("---")
@@ -336,29 +363,29 @@ st.markdown(
 # Model Comparison & Limits info section
 # ---------------------------------------------------------------------------
 with st.expander("\u2139\ufe0f  Model Comparison & API Limits", expanded=False):
-    st.markdown("### v25.05 vs v25.12 — Feature Comparison")
+    st.markdown("### v25.12 vs OCR 4.0 — Feature Comparison")
     st.markdown(
         """
-| Feature | v25.05 (`mistral-ocr-2505`) | v25.12 (`mistral-ocr-2512`) |
+| Feature | v25.12 (`mistral-document-ai-2512`) | OCR 4.0 (`mistral-ocr-4-0`) |
 |---------|----------------------------|----------------------------|
-| **OCR engine** | `mistral-ocr-2505` | `mistral-ocr-2512` + `mistral-small-2506` |
+| **OCR engine** | `mistral-ocr-2512` + `mistral-small-2506` | `mistral-ocr-4-0` (+ Mistral Medium 3.5 annotations) |
+| **Status** | GA | Preview |
 | **Markdown output** | \u2705 | \u2705 |
 | **Image extraction (bbox)** | \u2705 | \u2705 |
+| **Paragraph bounding boxes** | \u274c | \u2705 \u2014 per-paragraph layout coordinates |
+| **Block classification** | \u274c | \u2705 \u2014 title, header, footer, code, table, equation, paragraph, list, signature, image, caption, references |
+| **Inline confidence scores** | \u274c | \u2705 \u2014 per-page / per-word confidence |
 | **Hyperlink detection** | \u2705 | \u2705 |
-| **Complex layouts** | Basic multi-column | Advanced multi-column, merged cells, handwritten |
-| **`table_format`** | \u274c | `"markdown"` / `"html"` — structured table output |
-| **`extract_header`** | \u274c | \u2705 — extract page headers separately |
-| **`extract_footer`** | \u274c | \u2705 — extract page footers separately |
-| **`pages` selection** | \u274c | \u2705 — select specific pages (0-indexed) |
-| **`image_limit`** | \u274c | \u2705 — limit number of returned images |
-| **BBox annotations** | JSON Schema structured output | JSON Schema structured output |
-| **Document annotations** | JSON Schema structured output | + `document_annotation_prompt` |
-| **Document classification** | Via annotations | Via annotations (improved accuracy) |
-| **Chart-to-table** | Via bbox annotation | Via bbox annotation (enhanced) |
-| **Handwriting support** | Basic | Improved |
-| **Multilingual accuracy** | ~95%+ on major languages | **99%+** across 25+ languages |
+| **`table_format`** | `"markdown"` / `"html"` | `"markdown"` / `"markdown-tables"` / `"html"` (colspan/rowspan) |
+| **`extract_header` / `extract_footer`** | \u2705 | \u2705 |
+| **`pages` selection** | \u2705 | \u2705 |
+| **`image_limit`** | \u2705 | \u2705 |
+| **BBox / Document annotations** | JSON Schema structured output | JSON Schema structured output |
+| **Streaming API** | \u274c | \u2705 \u2014 redesigned, reduced time-to-first-token |
+| **Multilingual accuracy** | 99%+ across 25+ languages | **170 languages** |
 | **Supported formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | PDF, PNG, JPEG, AVIF, PPTX, DOCX |
-| **Batch inference** | \u2705 | \u2705 |
+| **Deployment SKU** | GlobalStandard | GlobalStandard / DataZoneStandard |
+| **Pricing (Global Standard)** | per Foundry pricing | $4 / 1K pages (OCR) \u00b7 $5 / 1K pages (OCR + annotations) |
 """
     )
 
@@ -367,7 +394,7 @@ with st.expander("\u2139\ufe0f  Model Comparison & API Limits", expanded=False):
         """
 | Limit | Value | Notes |
 |-------|-------|-------|
-| **Max file size** | **30 MB** per request | Applies to both v25.05 and v25.12 on Microsoft Foundry |
+| **Max file size** | **30 MB** per request | Applies to both v25.12 and OCR 4.0 on Microsoft Foundry |
 | **Max pages per request** | **30 pages** | Documents >30 pages are auto-chunked by this app |
 | **Annotations page limit** | **8 pages** | `document_annotation` limited to first 8 pages |
 | **Supported formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | Images: 1 page per request |
@@ -382,10 +409,10 @@ with st.expander("\u2139\ufe0f  Model Comparison & API Limits", expanded=False):
         "[OCR Processor](https://docs.mistral.ai/capabilities/document_ai/basic_ocr) · "
         "[Annotations](https://docs.mistral.ai/capabilities/document_ai/annotations) · "
         "[API Reference](https://docs.mistral.ai/api/endpoint/ocr) · "
-        "[Azure Model Card (2505)](https://ai.azure.com/explore/models/mistral-document-ai-2505/version/1/registry/azureml-mistral) · "
+        "[Azure Model Card (OCR 4.0)](https://ai.azure.com/catalog/models/mistral-ocr-4-0) · "
         "[Azure Model Card (2512)](https://ai.azure.com/explore/models/mistral-document-ai-2512/version/1/registry/azureml-mistral)"
     )
-    st.markdown("### v25.12 Parameters Reference")
+    st.markdown("### Parameters Reference (v25.12 / OCR 4.0)")
     st.markdown(
         """
 | Parameter | Type | Default | Description |
@@ -395,6 +422,8 @@ with st.expander("\u2139\ufe0f  Model Comparison & API Limits", expanded=False):
 | `extract_footer` | `bool` | `false` | Extract repeated page footers into `pages[].footer` |
 | `pages` | `list[int]` | all | Select specific pages (0-indexed) |
 | `image_limit` | `int` | unlimited | Max images to return |
+| `include_blocks` | `bool` | `false` | **OCR 4.0** \u2014 return content blocks with bounding boxes + type into `pages[].blocks` |
+| `confidence_scores_granularity` | `\"page\"` \\| `\"word\"` \\| `null` | `null` | **OCR 4.0** \u2014 inline confidence scores into `pages[].confidence_scores` |
 
 **`table_format` behaviour:**
 - **`null`** (default) \u2014 tables are only inline in the page markdown as pipe tables
@@ -506,8 +535,8 @@ if pdf_bytes and endpoint:
                 _DocSummary = _cm("DocumentSummary", topics=(list[str], ...), entities=(list[str], ...), summary=(str, ...))
                 doc_fmt = _pydantic_to_mistral_schema(_DocSummary)
 
-            # Parse v25.12 pages param
-            selected_pages = _parse_pages_input(pages_input) if is_v2512 else None
+            # Parse pages param (v25.12 / OCR 4.0)
+            selected_pages = _parse_pages_input(pages_input) if supports_advanced else None
 
             progress_bar.progress(0.10, text=f"Sending to {MODELS[model_key]['label']}\u2026")
 
@@ -518,11 +547,15 @@ if pdf_bytes and endpoint:
                     model_key=model_key,
                     api_key=api_key or None,
                     include_images=include_images,
-                    table_format=table_format_val if is_v2512 else None,
-                    extract_header=extract_header if is_v2512 else False,
-                    extract_footer=extract_footer if is_v2512 else False,
+                    table_format=table_format_val if supports_advanced else None,
+                    extract_header=extract_header if supports_advanced else False,
+                    extract_footer=extract_footer if supports_advanced else False,
                     pages=selected_pages,
-                    image_limit=image_limit if is_v2512 and image_limit > 0 else None,
+                    image_limit=image_limit if supports_advanced and image_limit > 0 else None,
+                    include_blocks=include_blocks if is_ocr4 else False,
+                    confidence_scores_granularity=(
+                        confidence_granularity if is_ocr4 and confidence_granularity != "off" else None
+                    ),
                     bbox_annotation_format=bbox_fmt,
                     document_annotation_format=doc_fmt,
                     document_annotation_prompt=doc_annotation_prompt or None,
@@ -535,7 +568,7 @@ if pdf_bytes and endpoint:
             st.session_state["pdf_name"] = pdf_name
             st.session_state["pdf_bytes"] = pdf_bytes
             st.session_state["model_key"] = model_key
-            st.session_state["table_format"] = table_format_val if is_v2512 else None
+            st.session_state["table_format"] = table_format_val if supports_advanced else None
         except Exception as exc:
             progress_bar.progress(1.0, text="\u274c Extraction failed")
             st.error(f"OCR extraction failed: {exc}")
@@ -791,11 +824,11 @@ if "result" in st.session_state:
     with tab_pages:
         st.markdown("### Per-page breakdown")
 
-        # Headers & Footers summary (v25.12)
+        # Headers & Footers summary (v25.12 / OCR 4.0)
         has_headers = any(p.header for p in result.pages)
         has_footers = any(p.footer for p in result.pages)
         if has_headers or has_footers:
-            with st.expander("\U0001f4cb Headers & Footers (v25.12)", expanded=True):
+            with st.expander("\U0001f4cb Headers & Footers", expanded=True):
                 hf_data = []
                 for p in result.pages:
                     hf_data.append({
@@ -818,6 +851,7 @@ if "result" in st.session_state:
                 "Words": len(p.markdown.split()),
                 "Tables": len(page_tables) + len(p.tables),
                 "Images": len(p.images),
+                "Blocks": len(p.blocks),
                 "Preview": p.markdown[:120].replace("\n", " "),
             }
             page_data.append(row)
@@ -839,6 +873,29 @@ if "result" in st.session_state:
             st.markdown(selected_page.markdown)
             if selected_page.footer:
                 st.caption(f"**Footer:** {selected_page.footer}")
+
+            # OCR 4.0: content blocks (type + bounding box + confidence)
+            if selected_page.blocks:
+                st.markdown("---")
+                st.markdown("#### \U0001f9e9 Content blocks (OCR 4.0)")
+                block_rows = []
+                for b in selected_page.blocks:
+                    text = b.get("content") or b.get("markdown") or b.get("text") or ""
+                    conf = b.get("confidence") or b.get("confidence_score")
+                    block_rows.append({
+                        "Type": b.get("type", "\u2014"),
+                        "BBox": str(b.get("bbox") or b.get("bounding_box") or "\u2014"),
+                        "Confidence": round(conf, 3) if isinstance(conf, (int, float)) else "\u2014",
+                        "Content": str(text)[:80].replace("\n", " "),
+                    })
+                st.dataframe(
+                    pd.DataFrame(block_rows), use_container_width=True, hide_index=True
+                )
+
+            # OCR 4.0: inline confidence scores (page / word granularity)
+            if selected_page.confidence_scores is not None:
+                with st.expander("\U0001f3af Confidence scores (OCR 4.0)", expanded=False):
+                    st.json(selected_page.confidence_scores)
 
     # --- Annotations tab ---
     with tab_annotations:
