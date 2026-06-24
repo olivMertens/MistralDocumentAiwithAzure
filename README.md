@@ -198,6 +198,7 @@ Web interface with:
 - Per-page breakdown with word counts, headers, footers
 - **Annotations tab**: bbox annotations (per image) and document-level annotations
 - v25.12 / OCR 4.0 controls: table_format, extract_header, extract_footer
+- OCR 4.0 controls: content blocks + bounding boxes, inline confidence scores
 - Save results to `extraction/` (markdown, CSV, JSON)
 - Extraction history in sidebar
 
@@ -239,7 +240,19 @@ Request body:
 }
 ```
 
-Response contains `pages[]` with `markdown`, `images[]`, `tables[]`, `hyperlinks[]`, `header`, `footer`, `dimensions` per page, plus top-level `document_annotation`.
+Response contains `pages[]` with `markdown`, `images[]`, `tables[]`, `hyperlinks[]`, `header`, `footer`, `dimensions` per page, plus top-level `document_annotation`. **OCR 4.0** additionally returns `pages[].blocks` (when `include_blocks` is set) and `pages[].confidence_scores` (when `confidence_scores_granularity` is set).
+
+**OCR 4.0 example** (block classification + confidence scores):
+
+```json
+{
+  "model": "mistral-ocr-4-0",
+  "document": { "type": "document_url", "document_url": "data:application/pdf;base64,{base64_pdf}" },
+  "include_blocks": true,
+  "confidence_scores_granularity": "page"
+}
+```
+
 
 ### Advanced Features (v25.12 / OCR 4.0)
 
@@ -252,6 +265,8 @@ These parameters are supported with **`mistral-document-ai-2512`** and **`mistra
 | `extract_footer` | `bool` | `false` | Extract page footers into a separate `footer` field |
 | `pages` | `list[int]` | all pages | Select specific pages to process (0-indexed) |
 | `image_limit` | `int` | unlimited | Maximum number of images to return across the document |
+| `include_blocks` | `bool` | `false` | **OCR 4.0 only** — return content blocks with bounding boxes + type classification into `pages[].blocks` |
+| `confidence_scores_granularity` | `"page"` \| `"word"` \| `null` | `null` | **OCR 4.0 only** — return inline confidence scores into `pages[].confidence_scores` |
 
 #### `table_format` — structured table output
 
@@ -287,6 +302,37 @@ This extracts pages 1, 3, and 5 only — useful for large documents where you on
 #### `image_limit`
 
 Caps the total number of images returned across all pages. Useful to reduce response size when you only need the text/tables. Set to `0` or omit to return all images.
+
+#### `include_blocks` — content blocks (OCR 4.0)
+
+**OCR 4.0 only.** When `true`, each page returns a `blocks` array of paragraph-level
+content blocks, each with a **bounding box** and a **type classification** (title,
+paragraph, table, equation, signature, list, caption, ...):
+
+```json
+{ "include_blocks": true }
+```
+
+```json
+"blocks": [
+  { "type": "title",     "bbox": [x0, y0, x1, y1], "content": "...", "confidence": 0.98 },
+  { "type": "paragraph", "bbox": [x0, y0, x1, y1], "content": "...", "confidence": 0.95 }
+]
+```
+
+Ideal for **layout-aware pipelines, semantic chunking (RAG), and citation management**.
+Older models (v25.12) return `blocks` as `null`.
+
+#### `confidence_scores_granularity` — inline confidence (OCR 4.0)
+
+**OCR 4.0 only.** Set to `"page"` or `"word"` to return inline confidence scores into
+`pages[].confidence_scores`. Use it for **human-in-the-loop QA** and **automated error
+flagging** (e.g. route low-confidence pages for review). `"word"` is the most detailed
+(and the largest response). Older models return `confidence_scores` as `null`.
+
+```json
+{ "confidence_scores_granularity": "page" }
+```
 
 ---
 

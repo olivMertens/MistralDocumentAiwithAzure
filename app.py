@@ -261,11 +261,35 @@ image_limit = st.sidebar.number_input(
         "when you only need text/tables. v25.12 / OCR 4.0."
     ),
 )
-if model_key == "ocr4":
+is_ocr4 = model_key == "ocr4"
+if is_ocr4:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### OCR 4.0 features")
     st.sidebar.caption(
         "\u2728 OCR 4.0 adds paragraph bounding boxes, block classification, "
         "and inline confidence scores."
     )
+include_blocks = st.sidebar.checkbox(
+    "Content blocks + bounding boxes",
+    value=False,
+    disabled=not is_ocr4,
+    help=(
+        "OCR 4.0 only. Return paragraph-level content blocks with bounding boxes and "
+        "type classification (title, paragraph, table, equation, signature, \u2026). "
+        "Great for semantic chunking (RAG), citations, and layout-aware pipelines."
+    ),
+)
+confidence_granularity = st.sidebar.selectbox(
+    "Confidence scores",
+    options=["off", "page", "word"],
+    index=0,
+    disabled=not is_ocr4,
+    help=(
+        "OCR 4.0 only. Return inline confidence scores per page or per word. "
+        "Useful for human-in-the-loop QA and automated error flagging. "
+        "'word' is the most detailed (and the largest response)."
+    ),
+)
 
 # Annotation controls
 st.sidebar.markdown("---")
@@ -398,6 +422,8 @@ with st.expander("\u2139\ufe0f  Model Comparison & API Limits", expanded=False):
 | `extract_footer` | `bool` | `false` | Extract repeated page footers into `pages[].footer` |
 | `pages` | `list[int]` | all | Select specific pages (0-indexed) |
 | `image_limit` | `int` | unlimited | Max images to return |
+| `include_blocks` | `bool` | `false` | **OCR 4.0** \u2014 return content blocks with bounding boxes + type into `pages[].blocks` |
+| `confidence_scores_granularity` | `\"page\"` \\| `\"word\"` \\| `null` | `null` | **OCR 4.0** \u2014 inline confidence scores into `pages[].confidence_scores` |
 
 **`table_format` behaviour:**
 - **`null`** (default) \u2014 tables are only inline in the page markdown as pipe tables
@@ -526,6 +552,10 @@ if pdf_bytes and endpoint:
                     extract_footer=extract_footer if supports_advanced else False,
                     pages=selected_pages,
                     image_limit=image_limit if supports_advanced and image_limit > 0 else None,
+                    include_blocks=include_blocks if is_ocr4 else False,
+                    confidence_scores_granularity=(
+                        confidence_granularity if is_ocr4 and confidence_granularity != "off" else None
+                    ),
                     bbox_annotation_format=bbox_fmt,
                     document_annotation_format=doc_fmt,
                     document_annotation_prompt=doc_annotation_prompt or None,
@@ -821,6 +851,7 @@ if "result" in st.session_state:
                 "Words": len(p.markdown.split()),
                 "Tables": len(page_tables) + len(p.tables),
                 "Images": len(p.images),
+                "Blocks": len(p.blocks),
                 "Preview": p.markdown[:120].replace("\n", " "),
             }
             page_data.append(row)
@@ -842,6 +873,29 @@ if "result" in st.session_state:
             st.markdown(selected_page.markdown)
             if selected_page.footer:
                 st.caption(f"**Footer:** {selected_page.footer}")
+
+            # OCR 4.0: content blocks (type + bounding box + confidence)
+            if selected_page.blocks:
+                st.markdown("---")
+                st.markdown("#### \U0001f9e9 Content blocks (OCR 4.0)")
+                block_rows = []
+                for b in selected_page.blocks:
+                    text = b.get("content") or b.get("markdown") or b.get("text") or ""
+                    conf = b.get("confidence") or b.get("confidence_score")
+                    block_rows.append({
+                        "Type": b.get("type", "\u2014"),
+                        "BBox": str(b.get("bbox") or b.get("bounding_box") or "\u2014"),
+                        "Confidence": round(conf, 3) if isinstance(conf, (int, float)) else "\u2014",
+                        "Content": str(text)[:80].replace("\n", " "),
+                    })
+                st.dataframe(
+                    pd.DataFrame(block_rows), use_container_width=True, hide_index=True
+                )
+
+            # OCR 4.0: inline confidence scores (page / word granularity)
+            if selected_page.confidence_scores is not None:
+                with st.expander("\U0001f3af Confidence scores (OCR 4.0)", expanded=False):
+                    st.json(selected_page.confidence_scores)
 
     # --- Annotations tab ---
     with tab_annotations:

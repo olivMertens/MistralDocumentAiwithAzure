@@ -174,6 +174,9 @@ async def ocr_pdf(
     extract_footer: bool = False,
     pages: list[int] | None = None,
     image_limit: int | None = None,
+    # OCR 4.0 only
+    include_blocks: bool = False,
+    confidence_scores_granularity: str | None = None,
     # Annotations
     bbox_annotation_format: dict | None = None,
     document_annotation_format: dict | None = None,
@@ -197,6 +200,12 @@ async def ocr_pdf(
         extract_footer: Extract page footers (v25.12 / OCR 4.0).
         pages: List of 0-based page indices to process.
         image_limit: Maximum number of images to return.
+        include_blocks: OCR 4.0 only. Return paragraph-level content blocks with
+            bounding boxes and type classification (title, paragraph, table,
+            equation, signature, ...). Populates ``OCRPage.blocks``.
+        confidence_scores_granularity: OCR 4.0 only. "word" or "page" — return
+            inline confidence scores at the requested granularity. Populates
+            ``OCRPage.confidence_scores``.
         bbox_annotation_format: JSON-schema dict for per-image structured annotations.
         document_annotation_format: JSON-schema dict for whole-document annotation.
         document_annotation_prompt: Prompt for document-level annotation.
@@ -262,6 +271,11 @@ async def ocr_pdf(
             payload["pages"] = pages
         if image_limit is not None:
             payload["image_limit"] = image_limit
+        # OCR 4.0 only: block classification / bounding boxes + confidence scores
+        if include_blocks:
+            payload["include_blocks"] = True
+        if confidence_scores_granularity:
+            payload["confidence_scores_granularity"] = confidence_scores_granularity
         # Annotations
         if bbox_annotation_format:
             payload["bbox_annotation_format"] = bbox_annotation_format
