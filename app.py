@@ -74,9 +74,105 @@ def _parse_pages_input(text: str) -> list[int] | None:
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Mistral Document AI - OCR Demo",
+    page_title="Mistral OCR 4.0 · Document AI on Azure",
     page_icon="📄",
     layout="wide",
+)
+
+# ---------------------------------------------------------------------------
+# Branding — Microsoft Azure (#0078D4) × Mistral AI flame (#FF6A13)
+# ---------------------------------------------------------------------------
+AZURE_BLUE = "#0078D4"
+AZURE_LIGHT = "#50E6FF"
+AZURE_DEEP = "#243A5E"
+MISTRAL_ORANGE = "#FF6A13"
+MISTRAL_AMBER = "#FFAF00"
+MISTRAL_RED = "#E10500"
+
+st.markdown(
+    """
+    <style>
+    :root {
+      --azure-blue: #0078D4; --azure-light: #50E6FF; --azure-deep: #243A5E;
+      --mistral-orange: #FF6A13; --mistral-amber: #FFAF00; --mistral-red: #E10500;
+    }
+    /* ---- Hero header ---- */
+    .brand-hero {
+      position: relative; border-radius: 18px; padding: 1.6rem 1.9rem;
+      margin: 0.1rem 0 1.1rem 0; overflow: hidden; color: #fff;
+      background:
+        radial-gradient(120% 150% at 0% 0%, rgba(0,120,212,0.18) 0%, rgba(0,120,212,0) 55%),
+        radial-gradient(120% 150% at 100% 0%, rgba(255,106,19,0.20) 0%, rgba(255,106,19,0) 55%),
+        linear-gradient(135deg, #0b2746 0%, #103a63 45%, #1d2f50 100%);
+      box-shadow: 0 10px 30px rgba(16,42,80,0.25);
+    }
+    .brand-hero::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
+      background: linear-gradient(90deg,#50E6FF 0%,#0078D4 32%,#FF8205 70%,#E10500 100%);
+    }
+    .brand-eyebrow {
+      font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #9bd0ff; margin-bottom: 0.35rem;
+    }
+    .brand-title { font-size: 2.0rem; font-weight: 800; line-height: 1.12; margin: 0 0 0.5rem 0; }
+    .brand-title .accent {
+      background: linear-gradient(90deg,#FFAF00,#FF6A13 55%,#E10500);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .brand-sub { font-size: 0.98rem; color: #d7e6f5; margin: 0; max-width: 60rem; }
+    .brand-chips { margin-top: 0.9rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.78rem;
+      font-weight: 600; padding: 0.3rem 0.75rem; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+    .chip-azure { background: rgba(0,120,212,0.22); color: #cfe9ff; }
+    .chip-mistral { background: rgba(255,106,19,0.22); color: #ffd9b8; }
+    .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .chip-azure .chip-dot { background: #50E6FF; }
+    .chip-mistral .chip-dot { background: #FF8205; }
+    /* ---- Primary button: Azure→Mistral gradient ---- */
+    .stButton > button[kind="primary"], [data-testid="stBaseButton-primary"] {
+      background: linear-gradient(90deg,#0078D4 0%,#1f6fc4 45%,#FF6A13 100%) !important;
+      border: none !important; color: #fff !important; font-weight: 600;
+      box-shadow: 0 6px 16px rgba(0,120,212,0.30);
+    }
+    .stButton > button[kind="primary"]:hover, [data-testid="stBaseButton-primary"]:hover {
+      filter: brightness(1.05); box-shadow: 0 8px 22px rgba(255,106,19,0.34);
+    }
+    /* ---- Metric cards ---- */
+    [data-testid="stMetric"] {
+      background: #fff; border: 1px solid #E2E8F0; border-left: 4px solid #0078D4;
+      border-radius: 12px; padding: 0.8rem 1rem; box-shadow: 0 2px 8px rgba(16,42,80,0.05);
+    }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] { color: #0b2746; }
+    /* ---- Tabs ---- */
+    .stTabs [data-baseweb="tab-list"] { gap: 0.25rem; }
+    .stTabs [data-baseweb="tab"] { font-weight: 600; }
+    .stTabs [aria-selected="true"] { color: #0078D4 !important; }
+    .stTabs [data-baseweb="tab-highlight"] { background-color: #0078D4 !important; }
+    /* ---- Complexity badges ---- */
+    .cx-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0.2rem 0; }
+    .cx-badge {
+      font-size: 0.76rem; font-weight: 600; padding: 0.24rem 0.62rem; border-radius: 999px;
+      border: 1px solid #cfe0f2; background: #eef5fc; color: #0b3b66;
+    }
+    .cx-badge.warn { background: #fff3e6; border-color: #ffd6a8; color: #9a4a00; }
+    .cx-badge.mistral { background: #fff0e6; border-color: #ffcaa3; color: #a83800; }
+    /* ---- Model column headers (compare view) ---- */
+    .model-head {
+      border-radius: 12px; padding: 0.55rem 0.95rem; font-weight: 700; color: #fff;
+      margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .model-head.ocr4 { background: linear-gradient(90deg,#FF8205,#E10500); }
+    .model-head.v2512 { background: linear-gradient(90deg,#0078D4,#243A5E); }
+    .model-head .mh-tag {
+      font-size: 0.72rem; font-weight: 600; background: rgba(255,255,255,0.22);
+      padding: 0.12rem 0.5rem; border-radius: 999px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------------------------
@@ -174,6 +270,229 @@ def run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+@st.cache_data(show_spinner=False)
+def _pdf_page_png(data: bytes, page_index: int, zoom: float = 0.55) -> bytes | None:
+    """Render a single PDF page to a PNG thumbnail (cached by content)."""
+    try:
+        import fitz
+
+        doc = fitz.open(stream=data, filetype="pdf")
+        pix = doc[page_index].get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        png = pix.tobytes("png")
+        doc.close()
+        return png
+    except Exception:
+        return None
+
+
+@st.cache_data(show_spinner=False)
+def _pdf_complexity(data: bytes) -> dict:
+    """Heuristic complexity profile of a PDF (cached by content)."""
+    try:
+        import fitz
+
+        doc = fitz.open(stream=data, filetype="pdf")
+        n = len(doc)
+        sample = min(n, 8)
+        images = words = drawings = 0
+        for i in range(sample):
+            pg = doc[i]
+            images += len(pg.get_images(full=True))
+            words += len(pg.get_text("words"))
+            try:
+                drawings += len(pg.get_drawings())
+            except Exception:
+                pass
+        doc.close()
+        avg_words = words // max(sample, 1)
+        return {
+            "pages": n,
+            "avg_words": avg_words,
+            "images": images,
+            "vectors": drawings,
+            "density": (
+                "Dense text" if avg_words > 600
+                else "Moderate text" if avg_words > 250
+                else "Light text"
+            ),
+        }
+    except Exception:
+        return {}
+
+
+def _render_sample_preview(data: bytes, max_thumbs: int = 6) -> None:
+    """Show page thumbnails + complexity badges for the selected document."""
+    cx = _pdf_complexity(data)
+    if not cx:
+        st.caption("Preview not available for this file.")
+        return
+    n = cx["pages"]
+    badges = [
+        f'<span class="cx-badge">{n} page(s)</span>',
+        f'<span class="cx-badge">{cx["density"]} · ~{cx["avg_words"]} words/page</span>',
+    ]
+    if cx["images"]:
+        badges.append(f'<span class="cx-badge mistral">{cx["images"]}+ embedded image(s)</span>')
+    if cx["vectors"] > 40:
+        badges.append('<span class="cx-badge mistral">Rich vector graphics</span>')
+    if n > 30:
+        badges.append('<span class="cx-badge warn">⚡ auto-chunked (&gt;30 pages)</span>')
+    st.markdown('<div class="cx-badges">' + "".join(badges) + "</div>", unsafe_allow_html=True)
+
+    thumb_count = min(n, max_thumbs)
+    ncols = min(thumb_count, 3) or 1
+    cols = st.columns(ncols)
+    for i in range(thumb_count):
+        png = _pdf_page_png(data, i)
+        with cols[i % ncols]:
+            if png:
+                st.image(png, caption=f"Page {i + 1}", width="stretch")
+            else:
+                st.caption(f"Page {i + 1}: preview failed")
+    if n > thumb_count:
+        st.caption(f"… and {n - thumb_count} more page(s) — showing the first {thumb_count}.")
+
+
+def _build_annotation_params():
+    """Construct bbox/document annotation schema params from sidebar state."""
+    bbox_fmt = _pydantic_to_mistral_schema(ImageDescription) if enable_bbox else None
+    doc_fmt = None
+    if enable_doc_annotation:
+        from pydantic import create_model as _cm
+
+        _DocSummary = _cm(
+            "DocumentSummary",
+            topics=(list[str], ...),
+            entities=(list[str], ...),
+            summary=(str, ...),
+        )
+        doc_fmt = _pydantic_to_mistral_schema(_DocSummary)
+    return bbox_fmt, doc_fmt
+
+
+def _run_ocr_for(mk: str, src_pdf: bytes, name: str, progress_cb=None) -> OCRResult:
+    """Run a single OCR call for model key `mk` using current sidebar settings."""
+    tmp_path = Path("data") / f"_tmp_{mk}_{name}"
+    tmp_path.parent.mkdir(exist_ok=True)
+    tmp_path.write_bytes(src_pdf)
+    bbox_fmt, doc_fmt = _build_annotation_params()
+    adv = mk in ("2512", "ocr4")
+    is4 = mk == "ocr4"
+    sel_pages = _parse_pages_input(pages_input) if adv else None
+    try:
+        return run_async(
+            ocr_pdf(
+                tmp_path,
+                endpoint=endpoint,
+                model_key=mk,
+                api_key=api_key or None,
+                include_images=include_images,
+                table_format=table_format_val if adv else None,
+                extract_header=extract_header if adv else False,
+                extract_footer=extract_footer if adv else False,
+                pages=sel_pages,
+                image_limit=image_limit if adv and image_limit > 0 else None,
+                include_blocks=include_blocks if is4 else False,
+                confidence_scores_granularity=(
+                    confidence_granularity if is4 and confidence_granularity != "off" else None
+                ),
+                bbox_annotation_format=bbox_fmt,
+                document_annotation_format=doc_fmt,
+                document_annotation_prompt=doc_annotation_prompt or None,
+                progress_callback=progress_cb,
+            )
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _render_comparison(cmp: dict, name: str) -> None:
+    """Render a side-by-side comparison of OCR 4.0 vs v25.12 results."""
+    st.markdown("---")
+    st.markdown("## ⚖️ Model comparison — OCR 4.0 vs v25.12")
+    st.caption(
+        f"Document: **{name}** — both models called with identical parameters, "
+        f"REST path and payload (`/providers/mistral/azure/ocr`)."
+    )
+
+    order = [("ocr4", "OCR 4.0", "ocr4"), ("2512", "v25.12", "v2512")]
+    cols = st.columns(2)
+    stats_by_model: dict[str, dict] = {}
+
+    for col, (mk, lbl, cls) in zip(cols, order):
+        entry = cmp.get(mk, {})
+        with col:
+            st.markdown(
+                f'<div class="model-head {cls}">{lbl}'
+                f'<span class="mh-tag">{get_deployment_name(mk)}</span></div>',
+                unsafe_allow_html=True,
+            )
+            if not entry.get("ok"):
+                st.error(f"❌ {entry.get('error', 'unknown error')}")
+                stats_by_model[mk] = {}
+                continue
+            res: OCRResult = entry["result"]
+            s = compute_doc_stats(res)
+            blocks = sum(len(p.blocks) for p in res.pages)
+            has_conf = any(p.confidence_scores is not None for p in res.pages)
+            stats_by_model[mk] = {
+                "time": res.elapsed_ms,
+                "pages": len(res.pages),
+                "words": s["words"],
+                "tables": s["tables"],
+                "images": len(res.images),
+                "sections": s["sections"],
+                "blocks": blocks,
+                "confidence": has_conf,
+                "result": res,
+            }
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Pages", len(res.pages))
+            c2.metric("Words", f"{s['words']:,}")
+            c3.metric("Tables", s["tables"])
+            c4, c5, c6 = st.columns(3)
+            c4.metric("Images", len(res.images))
+            c5.metric("Blocks", blocks)
+            c6.metric("Time", f"{res.elapsed_ms:.0f} ms")
+            with st.container(height=420, border=True):
+                st.markdown(res.markdown or "_No markdown returned._")
+            st.download_button(
+                f"Download {lbl} .md",
+                data=res.markdown,
+                file_name=f"{Path(name).stem}_{mk}.md",
+                mime="text/markdown",
+                key=f"cmp_dl_{mk}",
+            )
+
+    # Consolidated diff table
+    def _cell(mk: str, key: str, fmt=str):
+        v = stats_by_model.get(mk, {}).get(key)
+        return fmt(v) if v is not None else "—"
+
+    st.markdown("### Side-by-side metrics")
+    diff_rows = [
+        {"Metric": "Status", "OCR 4.0": "✅ OK" if stats_by_model.get("ocr4") else "❌ failed",
+         "v25.12": "✅ OK" if stats_by_model.get("2512") else "❌ failed"},
+        {"Metric": "Latency", "OCR 4.0": _cell("ocr4", "time", lambda v: f"{v:.0f} ms"),
+         "v25.12": _cell("2512", "time", lambda v: f"{v:.0f} ms")},
+        {"Metric": "Pages", "OCR 4.0": _cell("ocr4", "pages"), "v25.12": _cell("2512", "pages")},
+        {"Metric": "Words", "OCR 4.0": _cell("ocr4", "words", lambda v: f"{v:,}"),
+         "v25.12": _cell("2512", "words", lambda v: f"{v:,}")},
+        {"Metric": "Tables", "OCR 4.0": _cell("ocr4", "tables"), "v25.12": _cell("2512", "tables")},
+        {"Metric": "Images", "OCR 4.0": _cell("ocr4", "images"), "v25.12": _cell("2512", "images")},
+        {"Metric": "Sections", "OCR 4.0": _cell("ocr4", "sections"), "v25.12": _cell("2512", "sections")},
+        {"Metric": "Content blocks (bbox)", "OCR 4.0": _cell("ocr4", "blocks"),
+         "v25.12": "n/a"},
+        {"Metric": "Inline confidence", "OCR 4.0": "✅" if stats_by_model.get("ocr4", {}).get("confidence") else "—",
+         "v25.12": "n/a"},
+    ]
+    st.dataframe(pd.DataFrame(diff_rows), width="stretch", hide_index=True)
+    st.caption(
+        "**Content blocks** and **inline confidence** are OCR 4.0-only — enable "
+        "*Content blocks* / *Confidence scores* in the sidebar before comparing to populate them."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -353,10 +672,26 @@ else:
 # ---------------------------------------------------------------------------
 # Main UI
 # ---------------------------------------------------------------------------
-st.title("Mistral Document AI - OCR Extraction")
 st.markdown(
-    f"Upload a PDF or pick one from `data/` to extract text, tables, and images "
-    f"using **Mistral Document AI {MODELS[model_key]['label']}** on Microsoft Foundry."
+    """
+    <div class="brand-hero">
+      <div class="brand-eyebrow">Microsoft Azure AI Foundry × Mistral AI</div>
+      <div class="brand-title">Mistral Document AI · <span class="accent">OCR 4.0</span></div>
+      <p class="brand-sub">Layout-aware document OCR with paragraph bounding boxes, block
+      classification and inline confidence scores — extract text, tables and images, and
+      compare <b>OCR 4.0</b> live against <b>Mistral Document AI v25.12</b> on Microsoft Foundry.</p>
+      <div class="brand-chips">
+        <span class="chip chip-azure"><span class="chip-dot"></span>Azure AI Foundry</span>
+        <span class="chip chip-mistral"><span class="chip-dot"></span>Mistral OCR 4.0</span>
+        <span class="chip chip-azure"><span class="chip-dot"></span>REST · api 2024-05-01-preview</span>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.caption(
+    f"Active model: **Mistral Document AI {MODELS[model_key]['label']}** "
+    f"(`{resolved_deployment}`) — upload a PDF or pick one from `data/` to begin."
 )
 
 # ---------------------------------------------------------------------------
@@ -507,76 +842,80 @@ if pdf_bytes:
         st.info(" \u00b7 ".join(info_parts))
 
 # ---------------------------------------------------------------------------
+# Sample preview (shown at selection time to convey document complexity)
+# ---------------------------------------------------------------------------
+if pdf_bytes:
+    with st.expander("📄 Document preview & complexity", expanded=True):
+        st.caption(
+            "Visual preview of the selected document — gauge layout "
+            "complexity before running OCR."
+        )
+        _render_sample_preview(pdf_bytes)
+
+# ---------------------------------------------------------------------------
 # Process
 # ---------------------------------------------------------------------------
 if pdf_bytes and endpoint:
-    if st.button(
-        "Extract with Mistral Document AI",
-        type="primary",
-        use_container_width=True,
-    ):
-        tmp_path = Path("data") / f"_tmp_{pdf_name}"
-        tmp_path.parent.mkdir(exist_ok=True)
-        tmp_path.write_bytes(pdf_bytes)
+    run_col, cmp_col = st.columns([1, 1])
+    with run_col:
+        do_extract = st.button(
+            f"Extract with {MODELS[model_key]['label']}",
+            type="primary",
+            width="stretch",
+        )
+    with cmp_col:
+        do_compare = st.button(
+            "⚖️ Compare OCR 4.0 vs v25.12",
+            width="stretch",
+            help="Run BOTH models on this document and compare their output side by side.",
+        )
 
-        progress_bar = st.progress(0.0, text="Preparing extraction\u2026")
+    if do_extract:
+        progress_bar = st.progress(0.0, text="Preparing extraction…")
 
         def _on_progress(pct: float, msg: str) -> None:
             progress_bar.progress(min(pct, 1.0), text=msg)
 
         try:
-            progress_bar.progress(0.05, text="Validating document\u2026")
-
-            # Build annotation params
-            bbox_fmt = _pydantic_to_mistral_schema(ImageDescription) if enable_bbox else None
-            doc_fmt = None
-            if enable_doc_annotation:
-                from pydantic import create_model as _cm
-                _DocSummary = _cm("DocumentSummary", topics=(list[str], ...), entities=(list[str], ...), summary=(str, ...))
-                doc_fmt = _pydantic_to_mistral_schema(_DocSummary)
-
-            # Parse pages param (v25.12 / OCR 4.0)
-            selected_pages = _parse_pages_input(pages_input) if supports_advanced else None
-
-            progress_bar.progress(0.10, text=f"Sending to {MODELS[model_key]['label']}\u2026")
-
-            result: OCRResult = run_async(
-                ocr_pdf(
-                    tmp_path,
-                    endpoint=endpoint,
-                    model_key=model_key,
-                    api_key=api_key or None,
-                    include_images=include_images,
-                    table_format=table_format_val if supports_advanced else None,
-                    extract_header=extract_header if supports_advanced else False,
-                    extract_footer=extract_footer if supports_advanced else False,
-                    pages=selected_pages,
-                    image_limit=image_limit if supports_advanced and image_limit > 0 else None,
-                    include_blocks=include_blocks if is_ocr4 else False,
-                    confidence_scores_granularity=(
-                        confidence_granularity if is_ocr4 and confidence_granularity != "off" else None
-                    ),
-                    bbox_annotation_format=bbox_fmt,
-                    document_annotation_format=doc_fmt,
-                    document_annotation_prompt=doc_annotation_prompt or None,
-                    progress_callback=_on_progress,
-                )
-            )
-
-            progress_bar.progress(1.0, text="\u2705 Extraction complete!")
+            progress_bar.progress(0.10, text=f"Sending to {MODELS[model_key]['label']}…")
+            result = _run_ocr_for(model_key, pdf_bytes, pdf_name, _on_progress)
+            progress_bar.progress(1.0, text="✅ Extraction complete!")
             st.session_state["result"] = result
             st.session_state["pdf_name"] = pdf_name
             st.session_state["pdf_bytes"] = pdf_bytes
             st.session_state["model_key"] = model_key
             st.session_state["table_format"] = table_format_val if supports_advanced else None
+            st.session_state.pop("compare", None)
         except Exception as exc:
-            progress_bar.progress(1.0, text="\u274c Extraction failed")
+            progress_bar.progress(1.0, text="❌ Extraction failed")
             st.error(f"OCR extraction failed: {exc}")
-        finally:
-            tmp_path.unlink(missing_ok=True)
+
+    if do_compare:
+        progress_bar = st.progress(0.0, text="Preparing comparison…")
+        cmp_results: dict = {}
+        run_order = [("ocr4", "OCR 4.0"), ("2512", "v25.12")]
+        for i, (mk, lbl) in enumerate(run_order):
+            progress_bar.progress(i / len(run_order) + 0.05, text=f"Running {lbl}…")
+            try:
+                cmp_results[mk] = {"ok": True, "result": _run_ocr_for(mk, pdf_bytes, pdf_name)}
+            except Exception as exc:
+                cmp_results[mk] = {"ok": False, "error": str(exc)}
+            progress_bar.progress((i + 1) / len(run_order), text=f"{lbl} done")
+        progress_bar.progress(1.0, text="✅ Comparison complete!")
+        st.session_state["compare"] = cmp_results
+        st.session_state["compare_pdf_name"] = pdf_name
+        st.session_state.pop("result", None)
 
 elif not endpoint:
     st.warning("Set your MISTRAL_ENDPOINT in the sidebar or .env file.")
+
+# ---------------------------------------------------------------------------
+# Display comparison
+# ---------------------------------------------------------------------------
+if "compare" in st.session_state:
+    _render_comparison(
+        st.session_state["compare"], st.session_state.get("compare_pdf_name", "")
+    )
 
 # ---------------------------------------------------------------------------
 # Display results
@@ -743,7 +1082,7 @@ if "result" in st.session_state:
                 )
             st.dataframe(
                 pd.DataFrame(summary_data),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -771,7 +1110,7 @@ if "result" in st.session_state:
                     )
                     display_df = df[mask]
 
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                st.dataframe(display_df, width="stretch", hide_index=True)
 
                 csv = df.to_csv(index=False)
                 st.download_button(
@@ -805,7 +1144,7 @@ if "result" in st.session_state:
                             st.image(
                                 base64.b64decode(b64),
                                 caption=img_id,
-                                use_container_width=True,
+                                width="stretch",
                             )
                         else:
                             st.caption("No base64 image data available.")
@@ -838,7 +1177,7 @@ if "result" in st.session_state:
                     })
                 st.dataframe(
                     pd.DataFrame(hf_data),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 
@@ -856,7 +1195,7 @@ if "result" in st.session_state:
             }
             page_data.append(row)
         st.dataframe(
-            pd.DataFrame(page_data), use_container_width=True, hide_index=True
+            pd.DataFrame(page_data), width="stretch", hide_index=True
         )
 
         # Page selector with rendered markdown
@@ -889,7 +1228,7 @@ if "result" in st.session_state:
                         "Content": str(text)[:80].replace("\n", " "),
                     })
                 st.dataframe(
-                    pd.DataFrame(block_rows), use_container_width=True, hide_index=True
+                    pd.DataFrame(block_rows), width="stretch", hide_index=True
                 )
 
             # OCR 4.0: inline confidence scores (page / word granularity)
@@ -946,7 +1285,7 @@ if "result" in st.session_state:
     st.markdown("---")
     save_cols = st.columns([1, 1])
     with save_cols[0]:
-        if st.button("Save to extraction/ folder", use_container_width=True):
+        if st.button("Save to extraction/ folder", width="stretch"):
             out_dir = Path("extraction")
             out_dir.mkdir(exist_ok=True)
             stem = Path(pdf_name).stem

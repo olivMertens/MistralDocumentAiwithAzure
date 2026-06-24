@@ -1,0 +1,18 @@
+# Mistral Document AI — OCR 4.0 demo theme
+# Dual-brand palette: Microsoft Azure blue (#0078D4) + Mistral AI flame orange (#FF6A13)
+[theme]
+base = "light"
+primaryColor = "#0078D4"             # Azure blue — primary actions
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F7FB" # azure-tinted surfaces
+textColor = "#1B1F24"
+linkColor = "#0067C0"
+font = "sans serif"
+headingFont = "sans serif"
+baseRadius = "0.6rem"
+borderColor = "#E2E8F0"
+
+[theme.sidebar]
+backgroundColor = "#F4F8FC"
+secondaryBackgroundColor = "#E8F1FB"
+borderColor = "#D6E4F0"

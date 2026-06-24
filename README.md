@@ -1,4 +1,4 @@
-# Mistral Document AI - OCR Extraction Demo
+# Mistral Document AI · OCR 4.0 — OCR demo on Microsoft Foundry
 
 Standalone, self-contained project demonstrating **Mistral Document AI** OCR deployed and served through **Microsoft Foundry**.
 
@@ -87,9 +87,11 @@ Extract text, tables, and images from PDF documents using Python. Supports both 
 
 ```text
 mistral-document-ai/
-  pyproject.toml              # uv / pip dependencies
+  pyproject.toml              # uv / pip dependencies (Streamlit >= 1.58)
   .env.example                # Configuration template
-  app.py                      # Streamlit UI (model selector + annotations)
+  .streamlit/
+    config.toml               # Azure + Mistral brand theme
+  app.py                      # Streamlit UI (branded, sample viewer, live model compare)
   demo_ocr.ipynb              # Jupyter notebook walkthrough
   src/
     extract.py                # Core OCR client (async, REST, multi-model)
@@ -187,20 +189,36 @@ Interactive walkthrough: select model version, run OCR, view markdown, parse tab
 uv run streamlit run app.py
 ```
 
-Web interface with:
+> Requires **Streamlit >= 1.58** (latest GA). The pin lives in `pyproject.toml`; run `uv sync`
+> (or `pip install -e .`) to upgrade an existing environment.
 
-- **Model selector**: Switch between v25.12 and OCR 4.0
-- PDF upload or pick from `data/`
-- Side-by-side PDF viewer and extracted structure
-- Rendered markdown with raw source toggle
-- Table extraction with filtering, DataFrame display, and CSV download
-- Image viewer with base64 rendering in grid layout
-- Per-page breakdown with word counts, headers, footers
-- **Annotations tab**: bbox annotations (per image) and document-level annotations
-- v25.12 / OCR 4.0 controls: table_format, extract_header, extract_footer
-- OCR 4.0 controls: content blocks + bounding boxes, inline confidence scores
-- Save results to `extraction/` (markdown, CSV, JSON)
-- Extraction history in sidebar
+A **custom-branded** web app themed with the **Microsoft Azure** (`#0078D4`) and **Mistral AI**
+(flame `#FF6A13`) palettes — the two technologies on display — via `.streamlit/config.toml` plus
+targeted CSS. The headline features **Mistral OCR 4.0**, with **v25.12** as the GA comparison baseline.
+
+Highlights:
+
+- **Branded hero header** — Azure → Mistral gradient lockup, active-model caption.
+- **Sample complexity viewer** — when you upload or pick a PDF, the app renders **page thumbnails**
+  (PyMuPDF) plus **complexity badges** (page count, estimated tables/images, file size) *before*
+  extraction, so you can gauge how hard the document is.
+- **⚖️ Live side-by-side comparison** — one click runs **both** OCR 4.0 **and** v25.12 on the same
+  document and shows two columns: per-model metrics (latency, pages, words, tables, images,
+  sections, blocks, confidence), scrollable rendered markdown, and per-result download, plus a
+  consolidated diff table. Each model runs in its own `try/except`, so if OCR 4.0 is temporarily
+  unavailable (Preview 503), the v25.12 column still renders.
+- **Model selector** — switch between OCR 4.0 and v25.12 for a single-model deep dive.
+- PDF upload or pick from `data/`.
+- Rendered markdown with a raw-source toggle.
+- Table extraction with filtering, DataFrame display, and CSV download.
+- Image viewer with base64 rendering in a grid layout.
+- Per-page breakdown with word counts, headers, footers.
+- **Annotations tab**: bbox annotations (per image) and document-level annotations.
+- v25.12 / OCR 4.0 controls: `table_format`, `extract_header`, `extract_footer`.
+- OCR 4.0 controls: content blocks + bounding boxes (`include_blocks`), inline confidence scores
+  (`confidence_scores_granularity`).
+- Save results to `extraction/` (markdown, CSV, JSON).
+- Extraction history in the sidebar.
 
 ## Authentication
 
@@ -416,6 +434,7 @@ Documents over 30 pages are automatically split into chunks and processed in seq
 ## Requirements
 
 - Python 3.12+
+- **Streamlit >= 1.58** (latest GA) for the web UI — `numpy >= 2` with `pandas >= 2.2.2,<3`
 - **Microsoft Azure subscription** with a [Microsoft Foundry](https://learn.microsoft.com/azure/ai-services/) account
 - Mistral Document AI models deployed via `scripts/deploy_all.ps1` / `scripts/deploy_all.sh`
 - `az` CLI logged in (`az login`)
