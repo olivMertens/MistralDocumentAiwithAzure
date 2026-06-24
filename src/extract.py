@@ -74,6 +74,20 @@ MODELS: dict[str, dict] = {
 }
 
 
+# Supported image input formats → MIME type (Mistral OCR accepts these as image_url).
+SUPPORTED_IMAGE_MIME: dict[str, str] = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".avif": "image/avif",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+}
+
+
 def get_deployment_name(model_key: str = "2505") -> str:
     """Resolve deployment name from model key via env var or default."""
     info = MODELS.get(model_key)
@@ -148,12 +162,26 @@ def _split_pdf_bytes(pdf_data: bytes, max_pages: int = 30) -> list[str]:
     return chunks
 
 
+def _looks_like_pdf(data: bytes, filename: str) -> bool:
+    """Detect whether the input is a PDF (by extension or magic bytes)."""
+    if filename.lower().endswith(".pdf"):
+        return True
+    return data[:5].startswith(b"%PDF")
+
+
+def _image_mime(filename: str) -> str:
+    """Resolve the image MIME type from a filename extension (defaults to PNG)."""
+    ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+    return SUPPORTED_IMAGE_MIME.get(ext, "image/png")
+
+
 # ---------------------------------------------------------------------------
 # Core OCR function
 # ---------------------------------------------------------------------------
 
-async def ocr_pdf(
-    pdf_path: str | Path,
+async def ocr_document(
+    data: bytes,
+    filename: str = "document.pdf",
     *,
     endpoint: str | None = None,
     deployment: str | None = None,
@@ -175,10 +203,15 @@ async def ocr_pdf(
     progress_callback: Callable[[float, str], None] | None = None,
 ) -> OCRResult:
     """
-    Extract text (markdown) from a PDF using Mistral Document AI REST API.
+    Extract text (markdown) from a PDF *or* image using Mistral Document AI REST API.
+
+    Accepts raw bytes so it works equally well with uploaded files and on-disk files.
+    PDFs use the ``document_url`` chunk (auto-chunked over 30 pages); images
+    (PNG/JPEG/AVIF/...) use the ``image_url`` chunk.
 
     Args:
-        pdf_path: Path to PDF file.
+        data: Raw bytes of the document (PDF) or image.
+        filename: Original filename — used to detect type (PDF vs image) and MIME.
         endpoint: Microsoft Foundry endpoint URL.
         deployment: Model deployment name (overrides model_key).
         model_key: Model catalog key ("2505" or "2512"). Ignored if deployment is set.
@@ -219,30 +252,14 @@ async def ocr_pdf(
         base = f"{base}/providers/mistral/azure/ocr"
     url = f"{base}?api-version={api_version}"
 
-    # Read PDF
-    pdf_path = Path(pdf_path)
-    pdf_data = pdf_path.read_bytes()
-    pdf_b64 = base64.b64encode(pdf_data).decode()
-
     headers = await _get_auth_headers(api_key or None)
 
-    # Build payloads (chunk if >30 pages)
-    import fitz
+    is_pdf = _looks_like_pdf(data, filename)
 
-    doc = fitz.open(stream=pdf_data, filetype="pdf")
-    page_count = len(doc)
-    doc.close()
-
-    if progress_callback:
-        progress_callback(0.15, f"{page_count} page(s) detected")
-
-    def _build_payload(b64: str) -> dict:
+    def _build_payload(document: dict) -> dict:
         payload: dict = {
             "model": resolved_deployment,
-            "document": {
-                "type": "document_url",
-                "document_url": f"data:application/pdf;base64,{b64}",
-            },
+            "document": document,
             "include_image_base64": include_images,
         }
         # v25.12 features
@@ -266,11 +283,34 @@ async def ocr_pdf(
         return payload
 
     payloads: list[dict] = []
-    if page_count > 30:
-        for chunk_b64 in _split_pdf_bytes(pdf_data, max_pages=30):
-            payloads.append(_build_payload(chunk_b64))
+    if is_pdf:
+        # Build PDF payloads (chunk if >30 pages)
+        import fitz
+
+        doc = fitz.open(stream=data, filetype="pdf")
+        page_count = len(doc)
+        doc.close()
+
+        if progress_callback:
+            progress_callback(0.15, f"{page_count} page(s) detected")
+
+        def _pdf_doc(b64: str) -> dict:
+            return {"type": "document_url", "document_url": f"data:application/pdf;base64,{b64}"}
+
+        if page_count > 30:
+            for chunk_b64 in _split_pdf_bytes(data, max_pages=30):
+                payloads.append(_build_payload(_pdf_doc(chunk_b64)))
+        else:
+            payloads.append(_build_payload(_pdf_doc(base64.b64encode(data).decode())))
     else:
-        payloads.append(_build_payload(pdf_b64))
+        # Single image input → image_url chunk (no chunking; an image is one page).
+        mime = _image_mime(filename)
+        if progress_callback:
+            progress_callback(0.15, f"image input ({mime})")
+        img_b64 = base64.b64encode(data).decode()
+        payloads.append(
+            _build_payload({"type": "image_url", "image_url": f"data:{mime};base64,{img_b64}"})
+        )
 
     # Execute requests
     all_pages: list[OCRPage] = []
@@ -356,6 +396,56 @@ async def ocr_pdf(
         elapsed_ms=elapsed,
         document_annotation=doc_annotation,
     )
+
+
+async def ocr_pdf(pdf_path: str | Path, **kwargs) -> OCRResult:
+    """Backward-compatible wrapper: OCR a file on disk (PDF or image).
+
+    Reads the file and delegates to :func:`ocr_document`. All keyword arguments
+    are forwarded unchanged.
+    """
+    pdf_path = Path(pdf_path)
+    return await ocr_document(pdf_path.read_bytes(), pdf_path.name, **kwargs)
+
+
+async def compare_models(
+    data: bytes,
+    filename: str,
+    *,
+    model_keys: tuple[str, ...] = ("2505", "2512"),
+    endpoint: str | None = None,
+    api_key: str | None = None,
+    include_images: bool = False,
+    table_format: str | None = None,
+    extract_header: bool = False,
+    extract_footer: bool = False,
+) -> dict[str, OCRResult | Exception]:
+    """Run the same input through several models concurrently for comparison.
+
+    v25.12-only parameters (``table_format``, ``extract_header``, ``extract_footer``)
+    are applied only to the ``2512`` model. Returns a mapping of model key →
+    ``OCRResult`` (or the raised ``Exception`` if that model failed, so one failure
+    does not hide the other model's result).
+    """
+
+    async def _one(mk: str) -> OCRResult:
+        is_2512 = MODELS.get(mk, {}).get("version", "").startswith("25.12") or mk == "2512"
+        return await ocr_document(
+            data,
+            filename,
+            endpoint=endpoint,
+            model_key=mk,
+            api_key=api_key,
+            include_images=include_images,
+            table_format=table_format if is_2512 else None,
+            extract_header=extract_header if is_2512 else False,
+            extract_footer=extract_footer if is_2512 else False,
+        )
+
+    results = await asyncio.gather(
+        *[_one(mk) for mk in model_keys], return_exceptions=True
+    )
+    return dict(zip(model_keys, results))
 
 
 # ---------------------------------------------------------------------------

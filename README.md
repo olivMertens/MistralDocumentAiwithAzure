@@ -84,16 +84,19 @@ mistral-document-ai/
   pyproject.toml              # uv / pip dependencies
   .env.example                # Configuration template
   app.py                      # Streamlit UI (model selector + annotations)
+  pages/
+    1_Compare_Models.py       # Side-by-side v25.05 vs v25.12 comparison viewport
   demo_ocr.ipynb              # Jupyter notebook walkthrough
   src/
-    extract.py                # Core OCR client (async, REST, multi-model)
+    extract.py                # Core OCR client (async, REST, multi-model, PDF + images)
   scripts/
     deploy_all.ps1            # Deploy both models + auto-generate .env
     deploy_all.sh             # Deploy both models (Bash)
     setup_env.ps1             # Resolve existing deployments → .env
     setup_env.sh              # Resolve existing deployments → .env (Bash)
     generate_sample_pdf.py    # Generate sample PDF with tables
-  data/                       # Place your PDF files here
+    generate_sample_images.py # Generate printed + handwriting sample images
+  data/                       # Place your PDF / image files here
   extraction/                 # OCR output (markdown, CSV, JSON)
 ```
 
@@ -156,6 +159,19 @@ uv run python scripts/generate_sample_pdf.py
 
 Creates `data/sample_complex_report.pdf` — a multi-page document with tables, plot charts (bar, line, pie), ASCII art diagrams, and mixed text sections.
 
+#### Sample images (printed + handwriting)
+
+For the **model comparison** view, generate two images that share the same text — a clean
+printed note and a handwriting-style note (the hard case):
+
+```bash
+uv run python scripts/generate_sample_images.py
+```
+
+Creates `data/sample_printed_note.png` and `data/sample_handwritten_note.png`. These appear
+in the "Compare Models" sample picker and make the v25.05 → v25.12 handwriting improvement
+easy to demo.
+
 ### 5. Extract PDFs (CLI)
 
 Place PDF files in `data/`, then:
@@ -194,6 +210,29 @@ Web interface with:
 - v25.12 controls: table_format, extract_header, extract_footer
 - Save results to `extraction/` (markdown, CSV, JSON)
 - Extraction history in sidebar
+
+The app is multipage — use the sidebar to switch between the main extractor and the
+**Compare Models** page below.
+
+### 8. Model Comparison view (v25.05 vs v25.12)
+
+```bash
+uv run streamlit run app.py
+# then open "Compare Models" in the sidebar
+```
+
+A focused side-by-side **viewport** that runs the *same* input through both model versions
+at once — ideal for clean demos of the accuracy and latency difference:
+
+- **One input, both models**: upload a PDF **or image**, or pick a sample from `data/`
+- **3-pane viewport**: source preview · v25.05 extraction · v25.12 extraction
+- **Performance metrics**: per-model latency, word count, and character count (with deltas)
+- **Word-level diff**: highlights exactly what v25.12 added or changed vs v25.05
+- **Handwriting & documents**: both models run concurrently, so the comparison is fast and fair
+
+> Tip: run `scripts/generate_sample_images.py` first, then pick `sample_handwritten_note.png`
+> to showcase the handwriting accuracy gap. Image inputs (PNG, JPEG, AVIF, WEBP, …) are sent
+> to the OCR API as `image_url`; PDFs use `document_url`.
 
 ## Authentication
 
