@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-    Deploy both Mistral Document AI models (v25.05 + v25.12) and auto-generate .env.
+    Deploy both Mistral Document AI models (v25.12 + OCR 4.0) and auto-generate .env.
 .DESCRIPTION
-    Deploys mistral-document-ai-2505 and mistral-document-ai-2512 on an existing
+    Deploys mistral-document-ai-2512 and mistral-ocr-4-0 on an existing
     Microsoft Foundry account, retrieves the endpoint and API key, and writes
     the .env file automatically.
     Requires: az CLI logged in with sufficient permissions.
+    Note: mistral-ocr-4-0 is Preview and requires a GlobalStandard deployment.
 .PARAMETER AccountName
     Name of the Azure AI Services / Foundry account.
 .PARAMETER ResourceGroup
@@ -26,14 +27,16 @@ $ErrorActionPreference = "Stop"
 # Model definitions
 $Models = @(
     @{
-        DeploymentName = "mistral-document-ai-2505"
-        ModelName      = "mistral-document-ai-2505"
-        ModelVersion   = "25.05"
-    },
-    @{
         DeploymentName = "mistral-document-ai-2512"
         ModelName      = "mistral-document-ai-2512"
-        ModelVersion   = "25.12"
+        ModelVersion   = "1"
+        ModelFormat    = "Mistral AI"
+    },
+    @{
+        DeploymentName = "mistral-ocr-4-0"
+        ModelName      = "mistral-ocr-4-0"
+        ModelVersion   = "1"
+        ModelFormat    = "Mistral AI"
     }
 )
 
@@ -85,7 +88,7 @@ foreach ($model in $Models) {
             --deployment-name $dName `
             --model-name $model.ModelName `
             --model-version $model.ModelVersion `
-            --model-format "Mistral" `
+            --model-format $model.ModelFormat `
             --sku-name "GlobalStandard" `
             --sku-capacity $Capacity `
             --output json | Out-Null
@@ -108,7 +111,7 @@ $envContent = @"
 MISTRAL_ENDPOINT=$endpoint
 
 # Model deployments
-MISTRAL_DEPLOYMENT=mistral-document-ai-2505
+MISTRAL_DEPLOYMENT_OCR4=mistral-ocr-4-0
 MISTRAL_DEPLOYMENT_2512=mistral-document-ai-2512
 
 # API version

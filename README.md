@@ -4,7 +4,7 @@ Standalone, self-contained project demonstrating **Mistral Document AI** OCR dep
 
 This project leverages **Microsoft Foundry** as the hosting platform to deploy Mistral's Document AI models via the REST API. Both model versions are deployed as **GlobalStandard** SKU endpoints in the same Foundry project.
 
-Extract text, tables, and images from PDF documents using Python. Supports both **v25.05** (baseline) and **v25.12** (table_format, header/footer extraction, enhanced annotations).
+Extract text, tables, and images from PDF documents using Python. Supports both **v25.12** (table_format, header/footer extraction, enhanced annotations) and **OCR 4.0** (paragraph bounding boxes, block classification, inline confidence scores, 170 languages).
 
 ## Why Microsoft Foundry?
 
@@ -17,38 +17,41 @@ Extract text, tables, and images from PDF documents using Python. Supports both 
 
 | Model | Version | Deployment Name | Key Features |
 |-------|---------|-----------------|-------------|
-| Mistral Document AI 2505 | v25.05 | `mistral-document-ai-2505` | OCR, images, bbox annotations |
-| Mistral Document AI 2512 | v25.12 | `mistral-document-ai-2512` | + `table_format`, `extract_header/footer`, enhanced accuracy |
+| Mistral Document AI 2512 | v25.12 | `mistral-document-ai-2512` | OCR, images, bbox annotations, `table_format`, `extract_header/footer` |
+| Mistral Document AI OCR 4.0 | 4.0 (Preview) | `mistral-ocr-4-0` | + paragraph bounding boxes, block classification, inline confidence scores, 170 languages, streaming API |
 
-## v25.05 vs v25.12 — Detailed Comparison
+> **OCR 4.0 requires a GlobalStandard (or DataZoneStandard) deployment** and is currently in **Preview**.
 
-| Feature | v25.05 (`mistral-ocr-2505`) | v25.12 (`mistral-ocr-2512`) |
+## v25.12 vs OCR 4.0 — Detailed Comparison
+
+| Feature | v25.12 (`mistral-document-ai-2512`) | OCR 4.0 (`mistral-ocr-4-0`) |
 |---------|----------------------------|----------------------------|
-| **OCR engine** | `mistral-ocr-2505` | `mistral-ocr-2512` + `mistral-small-2506` |
+| **OCR engine** | `mistral-ocr-2512` + `mistral-small-2506` | `mistral-ocr-4-0` (+ Mistral Medium 3.5 annotations) |
+| **Status** | GA | Preview |
 | **Markdown output** | Yes | Yes |
 | **Image extraction (bbox)** | Yes | Yes |
+| **Paragraph bounding boxes** | No | Yes — per-paragraph layout coordinates |
+| **Block classification** | No | Yes — title, header, footer, code, table, equation, paragraph, list, signature, image, caption, references |
+| **Inline confidence scores** | No | Yes — per-page / per-word confidence |
 | **Hyperlink detection** | Yes | Yes |
-| **Complex layouts** | Basic multi-column | Advanced multi-column, mixed content |
-| **`table_format` parameter** | No (tables inline in markdown) | `null` / `"markdown"` / `"html"` — structured table output |
-| **`extract_header`** | No | Yes — extract page headers separately |
-| **`extract_footer`** | No | Yes — extract page footers separately |
-| **`pages` selection** | No — processes all pages | Yes — select specific pages (0-indexed) |
-| **`image_limit`** | No | Yes — limit number of returned images |
-| **BBox annotations** | JSON Schema structured output | JSON Schema structured output |
-| **Document annotations** | JSON Schema structured output | JSON Schema structured output + `document_annotation_prompt` |
-| **Document classification** | Via annotations | Via annotations (improved accuracy) |
-| **Chart-to-table conversion** | Via bbox annotation | Via bbox annotation (enhanced) |
-| **Handwriting support** | Basic | Improved |
+| **`table_format` parameter** | `null` / `"markdown"` / `"html"` | `null` / `"markdown"` / `"markdown-tables"` / `"html"` (colspan/rowspan) |
+| **`extract_header` / `extract_footer`** | Yes | Yes |
+| **`pages` selection** | Yes — select specific pages (0-indexed) | Yes |
+| **`image_limit`** | Yes | Yes |
+| **BBox / Document annotations** | JSON Schema structured output | JSON Schema structured output |
+| **Streaming API** | No | Yes — redesigned, reduced time-to-first-token |
+| **Multilingual accuracy** | 99%+ across 25+ languages | **170 languages** |
 | **Supported formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | PDF, PNG, JPEG, AVIF, PPTX, DOCX |
-| **Batch inference** | Yes | Yes |
+| **Deployment SKU** | GlobalStandard | GlobalStandard / DataZoneStandard |
+| **Pricing (Global Standard)** | per Foundry pricing | $4 / 1K pages (OCR) · $5 / 1K pages (OCR + annotations) |
 
-> **Note**: `table_format`, `extract_header`, and `extract_footer` parameters are **only available with OCR 2512 or newer** ([source](https://docs.mistral.ai/capabilities/document_ai/basic_ocr)).
+> **Note**: `table_format`, `extract_header`, and `extract_footer` parameters are available with **OCR 2512 and OCR 4.0** ([source](https://docs.mistral.ai/capabilities/document_ai/basic_ocr)).
 
 ### API Limits (Microsoft Foundry)
 
 | Limit | Value | Notes |
 |-------|-------|-------|
-| **Max file size** | **30 MB** per request | Applies to both v25.05 and v25.12 on Microsoft Foundry |
+| **Max file size** | **30 MB** per request | Applies to both v25.12 and OCR 4.0 on Microsoft Foundry |
 | **Max pages per request** | **30 pages** | Documents >30 pages are auto-chunked by this project |
 | **Annotations page limit** | **8 pages** | `document_annotation` processes only the first 8 pages |
 | **Supported input formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | Images count as 1 page |
@@ -68,8 +71,11 @@ Extract text, tables, and images from PDF documents using Python. Supports both 
 ### Microsoft Foundry
 
 - [Microsoft Foundry documentation](https://learn.microsoft.com/azure/ai-services/)
-- [Mistral Document AI 2505 — Azure Model Card](https://ai.azure.com/explore/models/mistral-document-ai-2505/version/1/registry/azureml-mistral)
+- [Mistral Document AI OCR 4.0 — Azure Model Card](https://ai.azure.com/catalog/models/mistral-ocr-4-0)
 - [Mistral Document AI 2512 — Azure Model Card](https://ai.azure.com/explore/models/mistral-document-ai-2512/version/1/registry/azureml-mistral)
+- [Mistral Document AI with OCR 4 and Mistral Medium 3.5 arrive in Microsoft Foundry](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/mistral-document-ai-with-ocr-4-and-mistral-medium-3-5-arrive-in-microsoft-foundr/4529863) — official announcement
+- [Mistral OCR 4 — release announcement](https://mistral.ai/news/ocr-4/)
+- [Unlocking Document Understanding with Mistral Document AI in Microsoft Foundry](https://azurefeeds.com/2025/06/24/unlocking-document-understanding-with-mistral-document-ai-in-microsoft-foundry/) — community walkthrough
 
 ### Cookbooks
 
@@ -111,7 +117,7 @@ mistral-document-ai/
 ./scripts/deploy_all.sh --account-name "my-ai-foundry" --resource-group "rg-demo"
 ```
 
-This creates `mistral-document-ai-2505` and `mistral-document-ai-2512` deployments and writes the `.env` file with endpoint, deployments, and API key.
+This creates `mistral-document-ai-2512` and `mistral-ocr-4-0` deployments and writes the `.env` file with endpoint, deployments, and API key.
 
 ### 2. Generate .env (if models already deployed)
 
@@ -183,7 +189,7 @@ uv run streamlit run app.py
 
 Web interface with:
 
-- **Model selector**: Switch between v25.05 and v25.12
+- **Model selector**: Switch between v25.12 and OCR 4.0
 - PDF upload or pick from `data/`
 - Side-by-side PDF viewer and extracted structure
 - Rendered markdown with raw source toggle
@@ -191,7 +197,7 @@ Web interface with:
 - Image viewer with base64 rendering in grid layout
 - Per-page breakdown with word counts, headers, footers
 - **Annotations tab**: bbox annotations (per image) and document-level annotations
-- v25.12 controls: table_format, extract_header, extract_footer
+- v25.12 / OCR 4.0 controls: table_format, extract_header, extract_footer
 - Save results to `extraction/` (markdown, CSV, JSON)
 - Extraction history in sidebar
 
@@ -235,9 +241,9 @@ Request body:
 
 Response contains `pages[]` with `markdown`, `images[]`, `tables[]`, `hyperlinks[]`, `header`, `footer`, `dimensions` per page, plus top-level `document_annotation`.
 
-### v25.12 Features
+### Advanced Features (v25.12 / OCR 4.0)
 
-These parameters are **only supported with `mistral-document-ai-2512`** (v25.12). Sending them to v25.05 will have no effect or produce an error.
+These parameters are supported with **`mistral-document-ai-2512`** and **`mistral-ocr-4-0`**.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
