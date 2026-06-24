@@ -74,7 +74,7 @@ def _parse_pages_input(text: str) -> list[int] | None:
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Mistral Document AI - OCR Demo",
+    page_title="Mistral Document AI - OCR & Model Comparison",
     page_icon="📄",
     layout="wide",
 )
@@ -328,8 +328,10 @@ else:
 # ---------------------------------------------------------------------------
 st.title("Mistral Document AI - OCR Extraction")
 st.markdown(
-    f"Upload a PDF or pick one from `data/` to extract text, tables, and images "
-    f"using **Mistral Document AI {MODELS[model_key]['label']}** on Microsoft Foundry."
+    f"Upload a PDF or image (or pick a sample from `data/`) to extract text, tables, "
+    f"and images using **Mistral Document AI {MODELS[model_key]['label']}** on Microsoft "
+    f"Foundry. For a side-by-side **v25.05 vs v25.12** view on handwriting and multilingual "
+    f"documents, open the **\U0001f58d\ufe0f Compare Models** page in the sidebar."
 )
 
 # ---------------------------------------------------------------------------

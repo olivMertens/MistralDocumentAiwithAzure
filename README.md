@@ -1,10 +1,10 @@
-# Mistral Document AI - OCR Extraction Demo
+# Mistral Document AI — OCR & Model Comparison Demo
 
 Standalone, self-contained project demonstrating **Mistral Document AI** OCR deployed and served through **Microsoft Foundry**.
 
 This project leverages **Microsoft Foundry** as the hosting platform to deploy Mistral's Document AI models via the REST API. Both model versions are deployed as **GlobalStandard** SKU endpoints in the same Foundry project.
 
-Extract text, tables, and images from PDF documents using Python. Supports both **v25.05** (baseline) and **v25.12** (table_format, header/footer extraction, enhanced annotations).
+Extract text, tables, and images from PDFs **and images** using Python, and compare **v25.05** (baseline) vs **v25.12** (table_format, header/footer extraction, enhanced annotations) **side-by-side** — built to show the difference on **handwriting** and **multilingual** documents (EN/FR/ES/DE/IT and 中文/日本語/한국어). Paste your endpoint + key once in the UI (saved in your browser), click **Test**, pick a sample, and **Compare**.
 
 ## Why Microsoft Foundry?
 
@@ -95,7 +95,7 @@ mistral-document-ai/
     setup_env.ps1             # Resolve existing deployments → .env
     setup_env.sh              # Resolve existing deployments → .env (Bash)
     generate_sample_pdf.py    # Generate sample PDF with tables
-    generate_sample_images.py # Generate printed + handwriting sample images
+    generate_sample_images.py # Generate multilingual printed + handwriting samples
   data/                       # Place your PDF / image files here
   extraction/                 # OCR output (markdown, CSV, JSON)
 ```
@@ -159,18 +159,20 @@ uv run python scripts/generate_sample_pdf.py
 
 Creates `data/sample_complex_report.pdf` — a multi-page document with tables, plot charts (bar, line, pie), ASCII art diagrams, and mixed text sections.
 
-#### Sample images (printed + handwriting)
+#### Sample images (multilingual printed + handwriting)
 
-For the **model comparison** view, generate two images that share the same text — a clean
-printed note and a handwriting-style note (the hard case):
+For the **model comparison** view, generate a curated set of images ranging from easy to
+very hard — including **handwriting in five languages** (EN/FR/ES/DE/IT with accents) and
+**printed CJK** (中文/日本語/한국어):
 
 ```bash
 uv run python scripts/generate_sample_images.py
 ```
 
-Creates `data/sample_printed_note.png` and `data/sample_handwritten_note.png`. These appear
-in the "Compare Models" sample picker and make the v25.05 → v25.12 handwriting improvement
-easy to demo.
+Creates `data/sample_*.png` (printed note, handwriting per language, CJK printed, and a
+deliberately messy "doctor's note"). They populate the "Compare Models" sample picker —
+sorted easy → very hard — so the v25.05 → v25.12 handwriting/multilingual improvement is
+easy to demo. Samples whose font isn't installed are skipped gracefully.
 
 ### 5. Extract PDFs (CLI)
 
@@ -224,15 +226,21 @@ uv run streamlit run app.py
 A focused side-by-side **viewport** that runs the *same* input through both model versions
 at once — ideal for clean demos of the accuracy and latency difference:
 
-- **One input, both models**: upload a PDF **or image**, or pick a sample from `data/`
+- **Browser-stored connection**: paste your **endpoint (DNS)** + **API key** once; they are
+  saved in your browser's **local storage** and prefilled next time. Hit **Test** for an
+  instant ✅/❌ connection check (and latency) before running anything.
+- **One input, both models**: pick a **curated sample** (sorted easy → very hard, incl.
+  multilingual handwriting) or upload your own PDF **or image**.
 - **3-pane viewport**: source preview · v25.05 extraction · v25.12 extraction
 - **Performance metrics**: per-model latency, word count, and character count (with deltas)
 - **Word-level diff**: highlights exactly what v25.12 added or changed vs v25.05
-- **Handwriting & documents**: both models run concurrently, so the comparison is fast and fair
+- **Handwriting & multilingual**: both models run concurrently, so the comparison is fast and fair
 
-> Tip: run `scripts/generate_sample_images.py` first, then pick `sample_handwritten_note.png`
-> to showcase the handwriting accuracy gap. Image inputs (PNG, JPEG, AVIF, WEBP, …) are sent
-> to the OCR API as `image_url`; PDFs use `document_url`.
+> Tip: run `scripts/generate_sample_images.py` first, then pick a handwriting sample (e.g.
+> French or the "doctor's note") to showcase the accuracy gap. Image inputs (PNG, JPEG,
+> AVIF, WEBP, …) are sent to the OCR API as `image_url`; PDFs use `document_url`.
+>
+> ⚠️ The API key is stored in plain text in your browser's local storage — use a demo/dev key.
 
 ## Authentication
 

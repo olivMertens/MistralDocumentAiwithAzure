@@ -448,6 +448,56 @@ async def compare_models(
     return dict(zip(model_keys, results))
 
 
+# A minimal 1x1 white PNG — used to ping the OCR endpoint for a connection test.
+_PING_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+async def test_connection(
+    endpoint: str,
+    api_key: str | None = None,
+    *,
+    model_key: str = "2505",
+    timeout: float = 30.0,
+) -> dict:
+    """Quickly verify endpoint + auth + deployment by OCR-pinging a 1x1 image.
+
+    Returns a dict ``{ok, message, elapsed_ms, status?}`` suitable for a UI badge.
+    Never raises — failures are reported in the returned dict.
+    """
+    if not endpoint:
+        return {"ok": False, "message": "No endpoint set."}
+
+    png = base64.b64decode(_PING_PNG_B64)
+    t0 = time.perf_counter()
+    try:
+        res = await asyncio.wait_for(
+            ocr_document(
+                png,
+                "ping.png",
+                endpoint=endpoint,
+                model_key=model_key,
+                api_key=api_key or None,
+            ),
+            timeout=timeout,
+        )
+        elapsed = (time.perf_counter() - t0) * 1000
+        return {
+            "ok": True,
+            "elapsed_ms": elapsed,
+            "message": f"Connected to {res.model}",
+        }
+    except asyncio.TimeoutError:
+        return {"ok": False, "message": f"Timed out after {timeout:.0f}s"}
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        detail = e.response.text[:200] if e.response is not None else ""
+        return {"ok": False, "status": status, "message": f"HTTP {status}: {detail}"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "message": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
