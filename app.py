@@ -74,7 +74,7 @@ def _parse_pages_input(text: str) -> list[int] | None:
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Mistral OCR 4.0 · Document AI on Azure",
+    page_title="Compare Mistral Document AI — OCR 4.0 vs v25.12 on Azure",
     page_icon="📄",
     layout="wide",
 )
@@ -169,6 +169,38 @@ st.markdown(
     .model-head .mh-tag {
       font-size: 0.72rem; font-weight: 600; background: rgba(255,255,255,0.22);
       padding: 0.12rem 0.5rem; border-radius: 999px;
+    }
+    /* ---- Whole-app background wash (Azure -> faint Mistral) ---- */
+    [data-testid="stAppViewContainer"] {
+      background:
+        radial-gradient(1200px 480px at 100% -6%, rgba(255,106,19,0.06) 0%, rgba(255,106,19,0) 60%),
+        radial-gradient(1100px 520px at 0% -8%, rgba(0,120,212,0.10) 0%, rgba(0,120,212,0) 55%),
+        #f3f8fe;
+    }
+    [data-testid="stHeader"] { background: transparent; }
+    [data-testid="stHeader"]::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+      background: linear-gradient(90deg,#50E6FF 0%,#0078D4 30%,#FF8205 72%,#E10500 100%);
+    }
+    /* ---- Sidebar: branded gradient surface + nav emphasis ---- */
+    [data-testid="stSidebar"] {
+      background: linear-gradient(180deg,#eaf3fd 0%,#e7effb 52%,#f4eefb 100%);
+      border-right: 1px solid #d6e4f0;
+    }
+    [data-testid="stSidebarNav"] a[aria-current="page"] {
+      background: rgba(0,120,212,0.12); font-weight: 700; border-radius: 8px;
+    }
+    .side-brand { padding: 0.15rem 0 0.5rem 0; line-height: 1.2; }
+    .side-brand-title {
+      font-weight: 800; font-size: 1.06rem;
+      background: linear-gradient(90deg,#0078D4,#FF6A13);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .side-brand-sub { font-size: 0.76rem; color: #5b6b7f; margin-top: 0.05rem; }
+    /* ---- Expanders as soft cards on the tinted body ---- */
+    [data-testid="stExpander"] {
+      background: rgba(255,255,255,0.78); border: 1px solid #d8e6f5;
+      border-radius: 14px; box-shadow: 0 2px 10px rgba(16,42,80,0.05);
     }
     </style>
     """,
@@ -293,11 +325,11 @@ def _render_sample_preview(data: bytes) -> None:
         st.caption("Inline preview unavailable - use the download button to open the PDF.")
 
 
-def _build_annotation_params():
-    """Construct bbox/document annotation schema params from sidebar state."""
-    bbox_fmt = _pydantic_to_mistral_schema(ImageDescription) if enable_bbox else None
+def _build_annotation_params(opts):
+    """Construct bbox/document annotation schema params from the given options."""
+    bbox_fmt = _pydantic_to_mistral_schema(ImageDescription) if opts["enable_bbox"] else None
     doc_fmt = None
-    if enable_doc_annotation:
+    if opts["enable_doc_annotation"]:
         from pydantic import create_model as _cm
 
         _DocSummary = _cm(
@@ -310,35 +342,37 @@ def _build_annotation_params():
     return bbox_fmt, doc_fmt
 
 
-def _run_ocr_for(mk: str, src_pdf: bytes, name: str, progress_cb=None) -> OCRResult:
-    """Run a single OCR call for model key `mk` using current sidebar settings."""
+def _run_ocr_for(mk: str, src_pdf: bytes, name: str, opts: dict, progress_cb=None) -> OCRResult:
+    """Run a single OCR call for model key `mk` using the given options dict."""
     tmp_path = Path("data") / f"_tmp_{mk}_{name}"
     tmp_path.parent.mkdir(exist_ok=True)
     tmp_path.write_bytes(src_pdf)
-    bbox_fmt, doc_fmt = _build_annotation_params()
+    bbox_fmt, doc_fmt = _build_annotation_params(opts)
     adv = mk in ("2512", "ocr4")
     is4 = mk == "ocr4"
-    sel_pages = _parse_pages_input(pages_input) if adv else None
+    sel_pages = _parse_pages_input(opts["pages_input"]) if adv else None
     try:
         return run_async(
             ocr_pdf(
                 tmp_path,
-                endpoint=endpoint,
+                endpoint=opts["endpoint"],
                 model_key=mk,
-                api_key=api_key or None,
-                include_images=include_images,
-                table_format=table_format_val if adv else None,
-                extract_header=extract_header if adv else False,
-                extract_footer=extract_footer if adv else False,
+                api_key=opts["api_key"] or None,
+                include_images=opts["include_images"],
+                table_format=opts["table_format_val"] if adv else None,
+                extract_header=opts["extract_header"] if adv else False,
+                extract_footer=opts["extract_footer"] if adv else False,
                 pages=sel_pages,
-                image_limit=image_limit if adv and image_limit > 0 else None,
-                include_blocks=include_blocks if is4 else False,
+                image_limit=opts["image_limit"] if adv and opts["image_limit"] > 0 else None,
+                include_blocks=opts["include_blocks"] if is4 else False,
                 confidence_scores_granularity=(
-                    confidence_granularity if is4 and confidence_granularity != "off" else None
+                    opts["confidence_granularity"]
+                    if is4 and opts["confidence_granularity"] != "off"
+                    else None
                 ),
                 bbox_annotation_format=bbox_fmt,
                 document_annotation_format=doc_fmt,
-                document_annotation_prompt=doc_annotation_prompt or None,
+                document_annotation_prompt=opts["doc_annotation_prompt"] or None,
                 progress_callback=progress_cb,
             )
         )
@@ -434,208 +468,256 @@ def _render_comparison(cmp: dict, name: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sidebar
+# Brand chips (reused across page heroes)
 # ---------------------------------------------------------------------------
-st.sidebar.title("Configuration")
-
-endpoint = st.sidebar.text_input(
-    "Endpoint",
-    value=os.getenv("MISTRAL_ENDPOINT", ""),
-    type="default",
-    help="Microsoft Foundry endpoint URL",
+CHIP_AZURE = (
+    '<span class="chip chip-azure"><span class="chip-dot"></span>Azure AI Foundry</span>'
+)
+CHIP_MISTRAL = (
+    '<span class="chip chip-mistral"><span class="chip-dot"></span>Mistral OCR 4.0</span>'
+)
+CHIP_API = (
+    '<span class="chip chip-azure"><span class="chip-dot"></span>'
+    'REST &middot; api 2024-05-01-preview</span>'
 )
 
-# Model selection
-model_options = {k: v["label"] + " - " + v["description"] for k, v in MODELS.items()}
-model_key = st.sidebar.radio(
-    "Model version",
-    options=list(MODELS.keys()),
-    format_func=lambda k: MODELS[k]["label"],
-    help="OCR 4.0 and v25.12 add table_format, header/footer extraction",
-)
-resolved_deployment = get_deployment_name(model_key)
-st.sidebar.caption(f"Deployment: `{resolved_deployment}`")
 
-api_key = st.sidebar.text_input(
-    "API Key (optional)",
-    value=os.getenv("AZURE_AI_KEY", ""),
-    type="password",
-    help="Leave empty to use Azure AD / DefaultAzureCredential",
-)
-include_images = st.sidebar.checkbox("Include image extraction", value=True)
-
-# Advanced feature controls (v25.12 / OCR 4.0)
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Advanced Features")
-supports_advanced = model_key in ("2512", "ocr4")
-table_format = st.sidebar.selectbox(
-    "Table format",
-    options=["(none)", "markdown", "html"],
-    disabled=not supports_advanced,
-    help=(
-        "Controls how tables are returned in the API response (v25.12 / OCR 4.0).\n\n"
-        "- **(none)**: tables are embedded inline in the page markdown only.\n"
-        "- **markdown**: tables are also returned as separate entries in `pages[].tables[]` "
-        "with a `markdown` key — easier for programmatic extraction.\n"
-        "- **html**: same, but with an `html` key containing `<table>` elements — "
-        "preserves `colspan`, `rowspan`, and merged cells better than markdown."
-    ),
-)
-table_format_val = None if table_format == "(none)" else table_format
-extract_header = st.sidebar.checkbox(
-    "Extract headers",
-    disabled=not supports_advanced,
-    help=(
-        "Extract repeated header text from the top of each page "
-        "(e.g. document title, chapter name). Returned in `pages[].header`."
-    ),
-)
-extract_footer = st.sidebar.checkbox(
-    "Extract footers",
-    disabled=not supports_advanced,
-    help=(
-        "Extract repeated footer text from the bottom of each page "
-        "(e.g. page numbers, disclaimers). Returned in `pages[].footer`."
-    ),
-)
-pages_input = st.sidebar.text_input(
-    "Pages (e.g. 1, 3, 5-8)",
-    disabled=not supports_advanced,
-    help=(
-        "Select specific pages to extract (1-indexed, comma-separated, ranges allowed). "
-        "Leave empty to process all pages. Useful for large documents where you only "
-        "need certain sections. v25.12 / OCR 4.0."
-    ),
-)
-image_limit = st.sidebar.number_input(
-    "Image limit",
-    min_value=0,
-    value=0,
-    disabled=not supports_advanced,
-    help=(
-        "Maximum number of images to return across all pages. "
-        "Set to 0 for unlimited. Useful to reduce response size "
-        "when you only need text/tables. v25.12 / OCR 4.0."
-    ),
-)
-is_ocr4 = model_key == "ocr4"
-if is_ocr4:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### OCR 4.0 features")
-    st.sidebar.caption(
-        "\u2728 OCR 4.0 adds paragraph bounding boxes, block classification, "
-        "and inline confidence scores."
-    )
-include_blocks = st.sidebar.checkbox(
-    "Content blocks + bounding boxes",
-    value=False,
-    disabled=not is_ocr4,
-    help=(
-        "OCR 4.0 only. Return paragraph-level content blocks with bounding boxes and "
-        "type classification (title, paragraph, table, equation, signature, \u2026). "
-        "Great for semantic chunking (RAG), citations, and layout-aware pipelines."
-    ),
-)
-confidence_granularity = st.sidebar.selectbox(
-    "Confidence scores",
-    options=["off", "page", "word"],
-    index=0,
-    disabled=not is_ocr4,
-    help=(
-        "OCR 4.0 only. Return inline confidence scores per page or per word. "
-        "Useful for human-in-the-loop QA and automated error flagging. "
-        "'word' is the most detailed (and the largest response)."
-    ),
-)
-
-# Annotation controls
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Annotations")
-st.sidebar.caption(
-    "Annotations use JSON Schema to extract structured data. "
-    "Limited to the first **8 pages** of the document."
-)
-enable_bbox = st.sidebar.checkbox(
-    "BBox annotations (per-image)",
-    help=(
-        "Classify each image found in the document using a JSON Schema. "
-        "Each image in `pages[].images[]` will include structured fields "
-        "(image_type, summary, details, is_relevant) alongside the base64 data.\n\n"
-        "Use cases: chart classification, logo detection, figure summarisation."
-    ),
-)
-enable_doc_annotation = st.sidebar.checkbox(
-    "Document annotation (whole-doc)",
-    help=(
-        "Extract a single structured summary for the entire document using a JSON Schema. "
-        "Mistral reads all content (text + images) and returns one structured object "
-        "in the `document_annotation` field.\n\n"
-        "Use cases: document classification, entity extraction, executive summaries, "
-        "invoice field extraction, compliance tagging."
-    ),
-)
-doc_annotation_prompt = ""
-if enable_doc_annotation:
-    doc_annotation_prompt = st.sidebar.text_area(
-        "Document annotation prompt",
-        value="Summarize this document with key topics and entities.",
-        height=80,
-        help="Optional prompt guiding the document-level annotation. Describes what you want extracted.",
+def _hero(eyebrow: str, title_html: str, sub_html: str, chips: list[str]) -> None:
+    """Render the branded, full-width page hero."""
+    st.markdown(
+        '<div class="brand-hero">'
+        '<div class="brand-eyebrow">' + eyebrow + '</div>'
+        '<div class="brand-title">' + title_html + '</div>'
+        '<p class="brand-sub">' + sub_html + '</p>'
+        '<div class="brand-chips">' + "".join(chips) + '</div>'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
-st.sidebar.markdown("---")
-st.sidebar.markdown(
-    "**Deploy models:** run `scripts/deploy_all.ps1` or `.sh`\n\n"
-    "**Auth:** API key or `az login` for DefaultAzureCredential"
-)
-
-# Sidebar: extraction history
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Extraction History")
-extraction_dir = Path("extraction")
-if extraction_dir.exists():
-    saved = sorted(extraction_dir.glob("*_meta.json"), reverse=True)
-    if saved:
-        for meta_file in saved[:10]:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            src = meta.get("source", meta_file.stem)
-            pages = meta.get("pages", "?")
-            tbls = meta.get("tables", meta.get("tables_found", 0))
-            st.sidebar.caption(f"{src} - {pages}p, {tbls} tables")
-    else:
-        st.sidebar.caption("No extractions saved yet.")
-else:
-    st.sidebar.caption("No extractions saved yet.")
 
 # ---------------------------------------------------------------------------
-# Main UI
+# Shared sidebar controls — Connection, OCR options, history
 # ---------------------------------------------------------------------------
-st.markdown(
+def render_connection() -> tuple[str, str]:
+    """Endpoint + API key (shared by the Extract and Compare pages)."""
+    with st.sidebar:
+        st.markdown("#### \U0001f50c Connection")
+        endpoint = st.text_input(
+            "Endpoint",
+            value=os.getenv("MISTRAL_ENDPOINT", ""),
+            key="cfg_endpoint",
+            help="Microsoft Foundry endpoint URL",
+        )
+        api_key = st.text_input(
+            "API key (optional)",
+            value=os.getenv("AZURE_AI_KEY", ""),
+            type="password",
+            key="cfg_api_key",
+            help="Leave empty to use Azure AD / DefaultAzureCredential",
+        )
+    return endpoint, api_key
+
+
+def render_ocr_options(include_model: bool = True) -> dict:
+    """Render OCR option widgets in the sidebar and return an options dict.
+
+    On the Extract page a model-version radio is shown. On the Compare page both
+    models always run, so the radio is hidden and the OCR 4.0 extras stay enabled
+    (they apply to the OCR 4.0 column).
     """
-    <div class="brand-hero">
-      <div class="brand-eyebrow">Microsoft Azure AI Foundry × Mistral AI</div>
-      <div class="brand-title">Mistral Document AI · <span class="accent">OCR 4.0</span></div>
-      <p class="brand-sub">Layout-aware document OCR with paragraph bounding boxes, block
-      classification and inline confidence scores — extract text, tables and images, and
-      compare <b>OCR 4.0</b> live against <b>Mistral Document AI v25.12</b> on Microsoft Foundry.</p>
-      <div class="brand-chips">
-        <span class="chip chip-azure"><span class="chip-dot"></span>Azure AI Foundry</span>
-        <span class="chip chip-mistral"><span class="chip-dot"></span>Mistral OCR 4.0</span>
-        <span class="chip chip-azure"><span class="chip-dot"></span>REST · api 2024-05-01-preview</span>
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-st.caption(
-    f"Active model: **Mistral Document AI {MODELS[model_key]['label']}** "
-    f"(`{resolved_deployment}`) — upload a PDF or pick one from `data/` to begin."
-)
+    opts: dict = {}
+    with st.sidebar:
+        if include_model:
+            st.markdown("#### \U0001f9e0 Model")
+            model_key = st.radio(
+                "Model version",
+                options=list(MODELS.keys()),
+                format_func=lambda k: MODELS[k]["label"],
+                key="cfg_model_key",
+                help="OCR 4.0 and v25.12 both support table_format and header/footer extraction.",
+            )
+            st.caption(f"Deployment: `{get_deployment_name(model_key)}`")
+            opts["model_key"] = model_key
+            is_ocr4 = model_key == "ocr4"
+        else:
+            is_ocr4 = True
+
+        opts["include_images"] = st.checkbox(
+            "Include image extraction", value=True, key="cfg_include_images"
+        )
+
+        with st.expander("\u2699\ufe0f Advanced extraction", expanded=False):
+            table_format = st.selectbox(
+                "Table format",
+                options=["(none)", "markdown", "html"],
+                key="cfg_table_format",
+                help=(
+                    "How tables are returned (v25.12 / OCR 4.0).\n\n"
+                    "- **(none)**: tables stay inline in the page markdown.\n"
+                    "- **markdown**: also returned in `pages[].tables[]` with a `markdown` key.\n"
+                    "- **html**: returned with an `html` key preserving colspan / rowspan."
+                ),
+            )
+            opts["table_format_val"] = None if table_format == "(none)" else table_format
+            opts["extract_header"] = st.checkbox(
+                "Extract headers",
+                key="cfg_extract_header",
+                help="Extract repeated header text from the top of each page (`pages[].header`).",
+            )
+            opts["extract_footer"] = st.checkbox(
+                "Extract footers",
+                key="cfg_extract_footer",
+                help="Extract repeated footer text from the bottom of each page (`pages[].footer`).",
+            )
+            opts["pages_input"] = st.text_input(
+                "Pages (e.g. 1, 3, 5-8)",
+                key="cfg_pages",
+                help="1-indexed, comma-separated, ranges allowed. Empty = all pages.",
+            )
+            opts["image_limit"] = st.number_input(
+                "Image limit",
+                min_value=0,
+                value=0,
+                key="cfg_image_limit",
+                help="Max images returned across all pages. 0 = unlimited.",
+            )
+
+        with st.expander("\u2728 OCR 4.0 features", expanded=False):
+            if not is_ocr4:
+                st.caption("Select **OCR 4.0** as the model to enable these.")
+            opts["include_blocks"] = st.checkbox(
+                "Content blocks + bounding boxes",
+                value=False,
+                disabled=not is_ocr4,
+                key="cfg_include_blocks",
+                help=(
+                    "OCR 4.0 only. Paragraph-level blocks with bounding boxes and type "
+                    "classification (title, paragraph, table, equation, signature, ...). "
+                    "Great for semantic chunking (RAG), citations and layout-aware pipelines."
+                ),
+            )
+            opts["confidence_granularity"] = st.selectbox(
+                "Confidence scores",
+                options=["off", "page", "word"],
+                index=0,
+                disabled=not is_ocr4,
+                key="cfg_confidence",
+                help=(
+                    "OCR 4.0 only. Inline confidence per page or per word for "
+                    "human-in-the-loop QA and automated error flagging."
+                ),
+            )
+
+        with st.expander("\U0001f3f7\ufe0f Annotations", expanded=False):
+            st.caption(
+                "JSON-Schema structured extraction. Limited to the first **8 pages**."
+            )
+            opts["enable_bbox"] = st.checkbox(
+                "BBox annotations (per-image)",
+                key="cfg_bbox",
+                help="Classify each image with a JSON Schema (image_type, summary, ...).",
+            )
+            opts["enable_doc_annotation"] = st.checkbox(
+                "Document annotation (whole-doc)",
+                key="cfg_doc_annot",
+                help="One structured summary for the whole document (`document_annotation`).",
+            )
+            prompt = ""
+            if opts["enable_doc_annotation"]:
+                prompt = st.text_area(
+                    "Document annotation prompt",
+                    value="Summarize this document with key topics and entities.",
+                    height=80,
+                    key="cfg_doc_prompt",
+                    help="Optional prompt guiding the document-level annotation.",
+                )
+            opts["doc_annotation_prompt"] = prompt
+
+    opts["supports_advanced"] = True
+    return opts
+
+
+def render_history() -> None:
+    """Recent extractions saved under extraction/ (collapsed in the sidebar)."""
+    with st.sidebar:
+        with st.expander("\U0001f553 Extraction history", expanded=False):
+            extraction_dir = Path("extraction")
+            saved = (
+                sorted(extraction_dir.glob("*_meta.json"), reverse=True)
+                if extraction_dir.exists()
+                else []
+            )
+            if saved:
+                for meta_file in saved[:10]:
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                    src = meta.get("source", meta_file.stem)
+                    pages = meta.get("pages", "?")
+                    tbls = meta.get("tables", meta.get("tables_found", 0))
+                    st.caption(f"{src} \u2014 {pages}p, {tbls} tables")
+            else:
+                st.caption("No extractions saved yet.")
+
+
+def file_input() -> tuple[bytes | None, str]:
+    """Upload or pick a PDF, validate, and show a preview. Keyed for cross-page persistence."""
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        uploaded_file = st.file_uploader(
+            "Upload PDF",
+            type=["pdf"],
+            key="in_upload",
+            help=f"PDF format \u2014 max {MAX_FILE_SIZE_MB} MB per file",
+        )
+    with col2:
+        data_dir = Path("data")
+        local_pdfs = sorted(data_dir.glob("*.pdf")) if data_dir.exists() else []
+        local_choice = st.selectbox(
+            "Or select from data/",
+            options=["(none)"] + [p.name for p in local_pdfs],
+            key="in_local_choice",
+        )
+
+    pdf_bytes: bytes | None = None
+    pdf_name = ""
+    if uploaded_file is not None:
+        pdf_bytes = uploaded_file.read()
+        pdf_name = uploaded_file.name
+    elif local_choice and local_choice != "(none)":
+        pdf_bytes = (Path("data") / local_choice).read_bytes()
+        pdf_name = local_choice
+
+    if pdf_bytes:
+        validation_error = _validate_upload(pdf_bytes, pdf_name)
+        if validation_error:
+            st.error(f"\u274c {validation_error}")
+            return None, ""
+        size_mb = len(pdf_bytes) / (1024 * 1024)
+        page_count = _get_page_count(pdf_bytes)
+        info_parts = [f"**{pdf_name}**", f"{size_mb:.2f} MB"]
+        if page_count is not None:
+            info_parts.append(f"{page_count} page(s)")
+            if page_count > 30:
+                info_parts.append("\u26a1 auto-chunked (>30 pages)")
+        if size_mb > MAX_FILE_SIZE_MB * 0.8:
+            st.warning(
+                f"\u26a0\ufe0f File is {size_mb:.1f} MB \u2014 approaching "
+                f"the {MAX_FILE_SIZE_MB} MB limit"
+            )
+        st.info(" \u00b7 ".join(info_parts))
+        with st.expander("\U0001f4c4 Document preview & complexity", expanded=True):
+            st.caption(
+                "Visual preview of the selected document \u2014 gauge layout "
+                "complexity before running OCR."
+            )
+            _render_sample_preview(pdf_bytes)
+
+    return pdf_bytes, pdf_name
+
 
 # ---------------------------------------------------------------------------
-# Model Comparison & Limits info section
+# Reference content (moved out of the viewport into its own page)
 # ---------------------------------------------------------------------------
-with st.expander("\u2139\ufe0f  Model Comparison & API Limits", expanded=False):
+def render_reference():
     st.markdown("### v25.12 vs OCR 4.0 — Feature Comparison")
     st.markdown(
         """
@@ -728,137 +810,12 @@ Annotations extract **structured data** from your document using JSON Schemas. L
 3. View results in the **Annotations** tab
 """
     )
-# File selection
-col1, col2 = st.columns([1, 1])
 
-with col1:
-    uploaded_file = st.file_uploader(
-        "Upload PDF",
-        type=["pdf"],
-        help=f"PDF format — max {MAX_FILE_SIZE_MB} MB per file",
-    )
-
-with col2:
-    data_dir = Path("data")
-    local_pdfs = sorted(data_dir.glob("*.pdf")) if data_dir.exists() else []
-    local_choice = st.selectbox(
-        "Or select from data/",
-        options=["(none)"] + [p.name for p in local_pdfs],
-    )
-
-# Determine which PDF to process
-pdf_bytes: bytes | None = None
-pdf_name = ""
-
-if uploaded_file is not None:
-    pdf_bytes = uploaded_file.read()
-    pdf_name = uploaded_file.name
-elif local_choice and local_choice != "(none)":
-    pdf_path = data_dir / local_choice
-    pdf_bytes = pdf_path.read_bytes()
-    pdf_name = local_choice
-
-# Validate and show file info
-if pdf_bytes:
-    validation_error = _validate_upload(pdf_bytes, pdf_name)
-    if validation_error:
-        st.error(f"\u274c {validation_error}")
-        pdf_bytes = None
-    else:
-        size_mb = len(pdf_bytes) / (1024 * 1024)
-        page_count = _get_page_count(pdf_bytes)
-        info_parts = [f"**{pdf_name}**", f"{size_mb:.2f} MB"]
-        if page_count is not None:
-            info_parts.append(f"{page_count} page(s)")
-            if page_count > 30:
-                info_parts.append("\u26a1 auto-chunked (>30 pages)")
-        if size_mb > MAX_FILE_SIZE_MB * 0.8:
-            st.warning(
-                f"\u26a0\ufe0f File is {size_mb:.1f} MB — approaching "
-                f"the {MAX_FILE_SIZE_MB} MB limit"
-            )
-        st.info(" \u00b7 ".join(info_parts))
 
 # ---------------------------------------------------------------------------
-# Sample preview (shown at selection time to convey document complexity)
+# Results renderer (single-model extraction view)
 # ---------------------------------------------------------------------------
-if pdf_bytes:
-    with st.expander("📄 Document preview & complexity", expanded=True):
-        st.caption(
-            "Visual preview of the selected document — gauge layout "
-            "complexity before running OCR."
-        )
-        _render_sample_preview(pdf_bytes)
-
-# ---------------------------------------------------------------------------
-# Process
-# ---------------------------------------------------------------------------
-if pdf_bytes and endpoint:
-    run_col, cmp_col = st.columns([1, 1])
-    with run_col:
-        do_extract = st.button(
-            f"Extract with {MODELS[model_key]['label']}",
-            type="primary",
-            width="stretch",
-        )
-    with cmp_col:
-        do_compare = st.button(
-            "⚖️ Compare OCR 4.0 vs v25.12",
-            width="stretch",
-            help="Run BOTH models on this document and compare their output side by side.",
-        )
-
-    if do_extract:
-        progress_bar = st.progress(0.0, text="Preparing extraction…")
-
-        def _on_progress(pct: float, msg: str) -> None:
-            progress_bar.progress(min(pct, 1.0), text=msg)
-
-        try:
-            progress_bar.progress(0.10, text=f"Sending to {MODELS[model_key]['label']}…")
-            result = _run_ocr_for(model_key, pdf_bytes, pdf_name, _on_progress)
-            progress_bar.progress(1.0, text="✅ Extraction complete!")
-            st.session_state["result"] = result
-            st.session_state["pdf_name"] = pdf_name
-            st.session_state["pdf_bytes"] = pdf_bytes
-            st.session_state["model_key"] = model_key
-            st.session_state["table_format"] = table_format_val if supports_advanced else None
-            st.session_state.pop("compare", None)
-        except Exception as exc:
-            progress_bar.progress(1.0, text="❌ Extraction failed")
-            st.error(f"OCR extraction failed: {exc}")
-
-    if do_compare:
-        progress_bar = st.progress(0.0, text="Preparing comparison…")
-        cmp_results: dict = {}
-        run_order = [("ocr4", "OCR 4.0"), ("2512", "v25.12")]
-        for i, (mk, lbl) in enumerate(run_order):
-            progress_bar.progress(i / len(run_order) + 0.05, text=f"Running {lbl}…")
-            try:
-                cmp_results[mk] = {"ok": True, "result": _run_ocr_for(mk, pdf_bytes, pdf_name)}
-            except Exception as exc:
-                cmp_results[mk] = {"ok": False, "error": str(exc)}
-            progress_bar.progress((i + 1) / len(run_order), text=f"{lbl} done")
-        progress_bar.progress(1.0, text="✅ Comparison complete!")
-        st.session_state["compare"] = cmp_results
-        st.session_state["compare_pdf_name"] = pdf_name
-        st.session_state.pop("result", None)
-
-elif not endpoint:
-    st.warning("Set your MISTRAL_ENDPOINT in the sidebar or .env file.")
-
-# ---------------------------------------------------------------------------
-# Display comparison
-# ---------------------------------------------------------------------------
-if "compare" in st.session_state:
-    _render_comparison(
-        st.session_state["compare"], st.session_state.get("compare_pdf_name", "")
-    )
-
-# ---------------------------------------------------------------------------
-# Display results
-# ---------------------------------------------------------------------------
-if "result" in st.session_state:
+def render_results():
     result: OCRResult = st.session_state["result"]
     pdf_name = st.session_state["pdf_name"]
     pdf_bytes_display: bytes = st.session_state.get("pdf_bytes", b"")
@@ -1263,3 +1220,153 @@ if "result" in st.session_state:
                 f"Saved to extraction/{stem}.md + metadata + "
                 f"{len(tables)} CSV(s) + full JSON"
             )
+
+
+
+# ---------------------------------------------------------------------------
+# Pages
+# ---------------------------------------------------------------------------
+def page_extract() -> None:
+    _hero(
+        "Microsoft Azure AI Foundry \u00d7 Mistral AI",
+        'Extract with <span class="accent">Mistral Document AI</span>',
+        "Run a single model \u2014 OCR 4.0 or v25.12 \u2014 to pull text, tables, images and "
+        "structure from a PDF on Microsoft Foundry. Choose the model and options in the sidebar.",
+        [CHIP_AZURE, CHIP_MISTRAL, CHIP_API],
+    )
+    endpoint, api_key = render_connection()
+    opts = render_ocr_options(include_model=True)
+    render_history()
+    opts["endpoint"], opts["api_key"] = endpoint, api_key
+    model_key = opts["model_key"]
+    st.caption(
+        f"Active model: **Mistral Document AI {MODELS[model_key]['label']}** "
+        f"(`{get_deployment_name(model_key)}`). Need the full capability / pricing breakdown? "
+        "Open **Model comparison** in the sidebar."
+    )
+
+    pdf_bytes, pdf_name = file_input()
+
+    if pdf_bytes and endpoint:
+        if st.button(
+            f"Extract with {MODELS[model_key]['label']}",
+            type="primary",
+            width="stretch",
+        ):
+            progress_bar = st.progress(0.0, text="Preparing extraction\u2026")
+
+            def _on_progress(pct: float, msg: str) -> None:
+                progress_bar.progress(min(pct, 1.0), text=msg)
+
+            try:
+                progress_bar.progress(
+                    0.10, text=f"Sending to {MODELS[model_key]['label']}\u2026"
+                )
+                result = _run_ocr_for(model_key, pdf_bytes, pdf_name, opts, _on_progress)
+                progress_bar.progress(1.0, text="\u2705 Extraction complete!")
+                st.session_state["result"] = result
+                st.session_state["pdf_name"] = pdf_name
+                st.session_state["pdf_bytes"] = pdf_bytes
+                st.session_state["model_key"] = model_key
+                st.session_state["table_format"] = opts["table_format_val"]
+                st.session_state.pop("compare", None)
+            except Exception as exc:
+                progress_bar.progress(1.0, text="\u274c Extraction failed")
+                st.error(f"OCR extraction failed: {exc}")
+    elif not endpoint:
+        st.warning(
+            "Set your endpoint in the sidebar **Connection** (or MISTRAL_ENDPOINT in .env)."
+        )
+
+    if "result" in st.session_state:
+        render_results()
+
+
+def page_compare() -> None:
+    _hero(
+        "Two models \u00b7 one document \u00b7 side by side",
+        'Compare <span class="accent">OCR 4.0</span> vs <span class="accent">v25.12</span>',
+        "Run <b>both</b> Mistral Document AI models on the same PDF and compare their markdown, "
+        "tables, images, timing and confidence \u2014 column by column. If one model is "
+        "unavailable, the other still renders.",
+        [CHIP_MISTRAL, CHIP_AZURE, CHIP_API],
+    )
+    endpoint, api_key = render_connection()
+    opts = render_ocr_options(include_model=False)
+    render_history()
+    opts["endpoint"], opts["api_key"] = endpoint, api_key
+
+    pdf_bytes, pdf_name = file_input()
+
+    if pdf_bytes and endpoint:
+        if st.button(
+            "\u2696\ufe0f Run both models",
+            type="primary",
+            width="stretch",
+            help="Run OCR 4.0 and v25.12 on this document and compare them side by side.",
+        ):
+            progress_bar = st.progress(0.0, text="Preparing comparison\u2026")
+            cmp_results: dict = {}
+            run_order = [("ocr4", "OCR 4.0"), ("2512", "v25.12")]
+            for i, (mk, lbl) in enumerate(run_order):
+                progress_bar.progress(
+                    i / len(run_order) + 0.05, text=f"Running {lbl}\u2026"
+                )
+                try:
+                    cmp_results[mk] = {
+                        "ok": True,
+                        "result": _run_ocr_for(mk, pdf_bytes, pdf_name, opts),
+                    }
+                except Exception as exc:
+                    cmp_results[mk] = {"ok": False, "error": str(exc)}
+                progress_bar.progress((i + 1) / len(run_order), text=f"{lbl} done")
+            progress_bar.progress(1.0, text="\u2705 Comparison complete!")
+            st.session_state["compare"] = cmp_results
+            st.session_state["compare_pdf_name"] = pdf_name
+            st.session_state.pop("result", None)
+    elif not endpoint:
+        st.warning(
+            "Set your endpoint in the sidebar **Connection** (or MISTRAL_ENDPOINT in .env)."
+        )
+
+    if "compare" in st.session_state:
+        _render_comparison(
+            st.session_state["compare"], st.session_state.get("compare_pdf_name", "")
+        )
+
+
+def page_reference() -> None:
+    _hero(
+        "Reference \u00b7 capabilities, limits & parameters",
+        'OCR 4.0 vs v25.12 \u2014 <span class="accent">feature reference</span>',
+        "Side-by-side capabilities, Microsoft Foundry API limits, request parameters and "
+        "pricing \u2014 everything you need to choose between the two Mistral Document AI models.",
+        [CHIP_AZURE, CHIP_MISTRAL, CHIP_API],
+    )
+    render_reference()
+
+
+# ---------------------------------------------------------------------------
+# Sidebar brand header + multipage navigation (st.navigation)
+# ---------------------------------------------------------------------------
+def main() -> None:
+    """Entry point: brand header + multipage navigation."""
+    st.sidebar.markdown(
+        '<div class="side-brand">'
+        '<div class="side-brand-title">Mistral Document AI</div>'
+        '<div class="side-brand-sub">OCR 4.0 vs v25.12 \u00b7 on Microsoft Azure</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    nav = st.navigation(
+        [
+            st.Page(page_extract, title="Extract", icon="\U0001f50d", default=True),
+            st.Page(page_compare, title="Compare models", icon="\u2696\ufe0f"),
+            st.Page(page_reference, title="Model comparison", icon="\U0001f4ca"),
+        ]
+    )
+    nav.run()
+
+
+if __name__ == "__main__":
+    main()
