@@ -6,6 +6,7 @@ Launch: uv run streamlit run app.py
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import base64
 import json
 import os
@@ -15,7 +16,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.extract import ocr_pdf, OCRResult, MODELS, get_deployment_name, _pydantic_to_mistral_schema, ImageDescription
+from src.extract import ocr_pdf, OCRResult, get_deployment_name, _pydantic_to_mistral_schema, ImageDescription
 
 # ---------------------------------------------------------------------------
 # Upload constraints (Microsoft Foundry limits)
@@ -380,13 +381,13 @@ def _run_ocr_for(mk: str, src_pdf: bytes, name: str, opts: dict, progress_cb=Non
         tmp_path.unlink(missing_ok=True)
 
 
-def _render_comparison(cmp: dict, name: str) -> None:
-    """Render a side-by-side comparison of OCR 4.0 vs v25.12 results."""
+def _render_comparison(cmp: dict, name: str, pdf_bytes: bytes = b"", table_format=None) -> None:
+    """Side-by-side OCR 4.0 vs v25.12 with a per-model deep dive."""
     st.markdown("---")
-    st.markdown("## ⚖️ Model comparison — OCR 4.0 vs v25.12")
+    st.markdown("## \u2696\ufe0f OCR 4.0 vs v25.12")
     st.caption(
-        f"Document: **{name}** — both models called with identical parameters, "
-        f"REST path and payload (`/providers/mistral/azure/ocr`)."
+        f"Document: **{name}** \u2014 both models were called **in parallel** with identical "
+        f"parameters and REST path (`/providers/mistral/azure/ocr`)."
     )
 
     order = [("ocr4", "OCR 4.0", "ocr4"), ("2512", "v25.12", "v2512")]
@@ -402,7 +403,7 @@ def _render_comparison(cmp: dict, name: str) -> None:
                 unsafe_allow_html=True,
             )
             if not entry.get("ok"):
-                st.error(f"❌ {entry.get('error', 'unknown error')}")
+                st.error(f"\u274c {entry.get('error', 'unknown error')}")
                 stats_by_model[mk] = {}
                 continue
             res: OCRResult = entry["result"]
@@ -428,25 +429,24 @@ def _render_comparison(cmp: dict, name: str) -> None:
             c4.metric("Images", len(res.images))
             c5.metric("Blocks", blocks)
             c6.metric("Time", f"{res.elapsed_ms:.0f} ms")
-            with st.container(height=420, border=True):
-                st.markdown(res.markdown or "_No markdown returned._")
             st.download_button(
                 f"Download {lbl} .md",
                 data=res.markdown,
                 file_name=f"{Path(name).stem}_{mk}.md",
                 mime="text/markdown",
                 key=f"cmp_dl_{mk}",
+                width="stretch",
             )
 
     # Consolidated diff table
     def _cell(mk: str, key: str, fmt=str):
         v = stats_by_model.get(mk, {}).get(key)
-        return fmt(v) if v is not None else "—"
+        return fmt(v) if v is not None else "\u2014"
 
     st.markdown("### Side-by-side metrics")
     diff_rows = [
-        {"Metric": "Status", "OCR 4.0": "✅ OK" if stats_by_model.get("ocr4") else "❌ failed",
-         "v25.12": "✅ OK" if stats_by_model.get("2512") else "❌ failed"},
+        {"Metric": "Status", "OCR 4.0": "\u2705 OK" if stats_by_model.get("ocr4") else "\u274c failed",
+         "v25.12": "\u2705 OK" if stats_by_model.get("2512") else "\u274c failed"},
         {"Metric": "Latency", "OCR 4.0": _cell("ocr4", "time", lambda v: f"{v:.0f} ms"),
          "v25.12": _cell("2512", "time", lambda v: f"{v:.0f} ms")},
         {"Metric": "Pages", "OCR 4.0": _cell("ocr4", "pages"), "v25.12": _cell("2512", "pages")},
@@ -457,14 +457,25 @@ def _render_comparison(cmp: dict, name: str) -> None:
         {"Metric": "Sections", "OCR 4.0": _cell("ocr4", "sections"), "v25.12": _cell("2512", "sections")},
         {"Metric": "Content blocks (bbox)", "OCR 4.0": _cell("ocr4", "blocks"),
          "v25.12": "n/a"},
-        {"Metric": "Inline confidence", "OCR 4.0": "✅" if stats_by_model.get("ocr4", {}).get("confidence") else "—",
+        {"Metric": "Inline confidence", "OCR 4.0": "\u2705" if stats_by_model.get("ocr4", {}).get("confidence") else "\u2014",
          "v25.12": "n/a"},
     ]
     st.dataframe(pd.DataFrame(diff_rows), width="stretch", hide_index=True)
     st.caption(
-        "**Content blocks** and **inline confidence** are OCR 4.0-only — enable "
+        "**Content blocks** and **inline confidence** are OCR 4.0-only \u2014 enable "
         "*Content blocks* / *Confidence scores* in the sidebar before comparing to populate them."
     )
+
+    # Per-model deep dive (full detail for each model, side by side as tabs)
+    st.markdown("### \U0001f50e Detailed breakdown per model")
+    d_ocr4, d_2512 = st.tabs(["\U0001f7e0 OCR 4.0", "\U0001f535 v25.12"])
+    for tab, mk, lbl in ((d_ocr4, "ocr4", "OCR 4.0"), (d_2512, "2512", "v25.12")):
+        with tab:
+            entry = cmp.get(mk, {})
+            if entry.get("ok"):
+                render_result_detail(entry["result"], name, pdf_bytes, table_format, key=mk)
+            else:
+                st.info(f"{lbl} did not return a result for this run.")
 
 
 # ---------------------------------------------------------------------------
@@ -499,49 +510,35 @@ def _hero(eyebrow: str, title_html: str, sub_html: str, chips: list[str]) -> Non
 # Shared sidebar controls — Connection, OCR options, history
 # ---------------------------------------------------------------------------
 def render_connection() -> tuple[str, str]:
-    """Endpoint + API key (shared by the Extract and Compare pages)."""
+    """Endpoint + API key (shared across pages). Both are required."""
     with st.sidebar:
         st.markdown("#### \U0001f50c Connection")
         endpoint = st.text_input(
             "Endpoint",
             value=os.getenv("MISTRAL_ENDPOINT", ""),
             key="cfg_endpoint",
-            help="Microsoft Foundry endpoint URL",
+            help="Microsoft Foundry endpoint, e.g. https://<resource>.services.ai.azure.com",
         )
         api_key = st.text_input(
-            "API key (optional)",
+            "API key",
             value=os.getenv("AZURE_AI_KEY", ""),
             type="password",
             key="cfg_api_key",
-            help="Leave empty to use Azure AD / DefaultAzureCredential",
+            help="Required \u2014 Microsoft Foundry API key for the deployment.",
         )
+        if not (endpoint and api_key):
+            st.caption("\u26a0\ufe0f Endpoint **and** API key are required to run OCR.")
     return endpoint, api_key
 
 
-def render_ocr_options(include_model: bool = True) -> dict:
-    """Render OCR option widgets in the sidebar and return an options dict.
+def render_ocr_options() -> dict:
+    """Render shared OCR option widgets in the sidebar and return an options dict.
 
-    On the Extract page a model-version radio is shown. On the Compare page both
-    models always run, so the radio is hidden and the OCR 4.0 extras stay enabled
-    (they apply to the OCR 4.0 column).
+    Both models always run on the document, so there is no model selector. The
+    OCR 4.0-only extras (content blocks, confidence) apply to the OCR 4.0 column.
     """
     opts: dict = {}
     with st.sidebar:
-        if include_model:
-            st.markdown("#### \U0001f9e0 Model")
-            model_key = st.radio(
-                "Model version",
-                options=list(MODELS.keys()),
-                format_func=lambda k: MODELS[k]["label"],
-                key="cfg_model_key",
-                help="OCR 4.0 and v25.12 both support table_format and header/footer extraction.",
-            )
-            st.caption(f"Deployment: `{get_deployment_name(model_key)}`")
-            opts["model_key"] = model_key
-            is_ocr4 = model_key == "ocr4"
-        else:
-            is_ocr4 = True
-
         opts["include_images"] = st.checkbox(
             "Include image extraction", value=True, key="cfg_include_images"
         )
@@ -583,12 +580,10 @@ def render_ocr_options(include_model: bool = True) -> dict:
             )
 
         with st.expander("\u2728 OCR 4.0 features", expanded=False):
-            if not is_ocr4:
-                st.caption("Select **OCR 4.0** as the model to enable these.")
+            st.caption("These apply to the **OCR 4.0** column of the comparison.")
             opts["include_blocks"] = st.checkbox(
                 "Content blocks + bounding boxes",
                 value=False,
-                disabled=not is_ocr4,
                 key="cfg_include_blocks",
                 help=(
                     "OCR 4.0 only. Paragraph-level blocks with bounding boxes and type "
@@ -600,7 +595,6 @@ def render_ocr_options(include_model: bool = True) -> dict:
                 "Confidence scores",
                 options=["off", "page", "word"],
                 index=0,
-                disabled=not is_ocr4,
                 key="cfg_confidence",
                 help=(
                     "OCR 4.0 only. Inline confidence per page or per word for "
@@ -813,120 +807,38 @@ Annotations extract **structured data** from your document using JSON Schemas. L
 
 
 # ---------------------------------------------------------------------------
-# Results renderer (single-model extraction view)
+# Per-model detail renderer (used by the comparison view)
 # ---------------------------------------------------------------------------
-def render_results():
-    result: OCRResult = st.session_state["result"]
-    pdf_name = st.session_state["pdf_name"]
-    pdf_bytes_display: bytes = st.session_state.get("pdf_bytes", b"")
-
-    # ---- Metrics bar ----
-    st.markdown("---")
-    stats = compute_doc_stats(result)
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("Pages", len(result.pages))
-    m2.metric("Words", f"{stats['words']:,}")
-    m3.metric("Tables", stats["tables"])
-    m4.metric("Sections", stats["sections"])
-    m5.metric("Images", len(result.images))
-    m6.metric("Time", f"{result.elapsed_ms:.0f} ms")
-
-    if result.usage:
-        st.caption(f"Token usage: {result.usage}")
-
-    # ---- Tabs ----
-    tab_overview, tab_md, tab_tables, tab_images, tab_pages, tab_annotations, tab_raw = st.tabs(
-        [
-            "Document Overview",
-            "Full Markdown",
-            "Tables",
-            "Images",
-            "Per Page",
-            "Annotations",
-            "Raw JSON",
-        ]
+def render_result_detail(result, pdf_name, pdf_bytes_display=b"", table_format=None, *, key=""):
+    """Render the detailed tabbed view for a single OCR result (model-scoped keys)."""
+    tab_md, tab_tables, tab_images, tab_pages, tab_annotations, tab_raw = st.tabs(
+        ["Full Markdown", "Tables", "Images", "Per Page", "Annotations", "Raw JSON"]
     )
-
-    # --- Document Overview tab ---
-    with tab_overview:
-        st.markdown("### Document Comprehension")
-        st.markdown(
-            "Side-by-side view of the original PDF and OCR-extracted content "
-            "with structural analysis."
-        )
-
-        ov_left, ov_right = st.columns([1, 1])
-
-        with ov_left:
-            st.markdown("#### Original PDF")
-            if pdf_bytes_display:
-                b64_pdf = base64.b64encode(pdf_bytes_display).decode()
-                pdf_iframe = (
-                    f'<iframe src="data:application/pdf;base64,{b64_pdf}" '
-                    f'width="100%" height="600" type="application/pdf"></iframe>'
-                )
-                st.markdown(pdf_iframe, unsafe_allow_html=True)
-            else:
-                st.caption("PDF preview not available.")
-
-        with ov_right:
-            st.markdown("#### Extracted Structure")
-
-            # Structure indicators
-            badges = []
-            if stats["has_headers"]:
-                badges.append("Headers")
-            if stats["tables"] > 0:
-                badges.append(f"{stats['tables']} Tables")
-            if stats["has_lists"]:
-                badges.append("Lists")
-            if stats["has_numbers"]:
-                badges.append("Numerical Data")
-            if len(result.images) > 0:
-                badges.append(f"{len(result.images)} Images")
-            st.markdown("**Detected elements:** " + " | ".join(badges))
-
-            # Section breakdown
-            sections = extract_sections(result.markdown)
-            for sec in sections:
-                word_count = len(sec["content"].split())
-                tbl_count = len(extract_markdown_tables(sec["content"]))
-                label = f"{sec['title']} ({word_count}w"
-                if tbl_count:
-                    label += f", {tbl_count} table(s)"
-                label += ")"
-                with st.expander(label, expanded=False):
-                    st.markdown(sec["content"][:2000])
-                    if len(sec["content"]) > 2000:
-                        st.caption("... (content truncated in preview)")
 
     # --- Full Markdown tab ---
     with tab_md:
         st.markdown("### Extracted Markdown")
-
         view_mode = st.radio(
             "View mode",
             ["Rendered", "Raw source"],
             horizontal=True,
-            key="md_view",
+            key=f"{key}_md_view",
         )
-
         if view_mode == "Rendered":
             st.markdown(result.markdown)
         else:
             st.code(result.markdown, language="markdown")
-
         st.download_button(
             "Download .md",
             data=result.markdown,
-            file_name=f"{Path(pdf_name).stem}.md",
+            file_name=f"{Path(pdf_name).stem}_{key}.md",
             mime="text/markdown",
+            key=f"{key}_dl_md",
         )
 
     # --- Tables tab ---
     with tab_tables:
-        # Use structured tables from response if available
-        used_format = st.session_state.get("table_format")
+        used_format = table_format
         structured_tables = []
         for p in result.pages:
             structured_tables.extend(p.tables)
@@ -941,18 +853,18 @@ def render_results():
                     st.download_button(
                         f"Download Table {idx + 1} (HTML)",
                         data=tbl["html"],
-                        file_name=f"{Path(pdf_name).stem}_api_table_{idx + 1}.html",
+                        file_name=f"{Path(pdf_name).stem}_{key}_api_table_{idx + 1}.html",
                         mime="text/html",
-                        key=f"api_html_{idx}",
+                        key=f"{key}_api_html_{idx}",
                     )
                 elif isinstance(tbl, dict) and "markdown" in tbl:
                     st.markdown(tbl["markdown"])
                     st.download_button(
                         f"Download Table {idx + 1} (Markdown)",
                         data=tbl["markdown"],
-                        file_name=f"{Path(pdf_name).stem}_api_table_{idx + 1}.md",
+                        file_name=f"{Path(pdf_name).stem}_{key}_api_table_{idx + 1}.md",
                         mime="text/markdown",
-                        key=f"api_md_{idx}",
+                        key=f"{key}_api_md_{idx}",
                     )
                 else:
                     st.json(tbl)
@@ -962,8 +874,6 @@ def render_results():
         tables = extract_markdown_tables(result.markdown)
         if tables:
             st.markdown(f"### {len(tables)} table(s) detected")
-
-            # Summary of all tables
             summary_data = []
             for idx, df in enumerate(tables):
                 summary_data.append(
@@ -975,26 +885,17 @@ def render_results():
                         + ("..." if df.shape[1] > 5 else ""),
                     }
                 )
-            st.dataframe(
-                pd.DataFrame(summary_data),
-                width="stretch",
-                hide_index=True,
-            )
-
+            st.dataframe(pd.DataFrame(summary_data), width="stretch", hide_index=True)
             st.markdown("---")
-
-            # Individual tables with search/filter
             for idx, df in enumerate(tables):
                 st.markdown(
                     f"**Table {idx + 1}** ({df.shape[0]} rows x {df.shape[1]} cols)"
                 )
-
                 search_term = st.text_input(
                     f"Filter Table {idx + 1}",
-                    key=f"filter_{idx}",
+                    key=f"{key}_filter_{idx}",
                     placeholder="Type to filter rows...",
                 )
-
                 display_df = df
                 if search_term:
                     mask = df.apply(
@@ -1004,16 +905,14 @@ def render_results():
                         axis=1,
                     )
                     display_df = df[mask]
-
                 st.dataframe(display_df, width="stretch", hide_index=True)
-
                 csv = df.to_csv(index=False)
                 st.download_button(
                     f"Download Table {idx + 1} as CSV",
                     data=csv,
-                    file_name=f"{Path(pdf_name).stem}_table_{idx + 1}.csv",
+                    file_name=f"{Path(pdf_name).stem}_{key}_table_{idx + 1}.csv",
                     mime="text/csv",
-                    key=f"csv_{idx}",
+                    key=f"{key}_csv_{idx}",
                 )
                 st.markdown("---")
         else:
@@ -1026,39 +925,26 @@ def render_results():
             cols_per_row = 2
             for i in range(0, len(result.images), cols_per_row):
                 img_cols = st.columns(cols_per_row)
-                for col_idx, img in enumerate(
-                    result.images[i : i + cols_per_row]
-                ):
+                for col_idx, img in enumerate(result.images[i : i + cols_per_row]):
                     img_id = img.get("id", "unknown")
                     page = img.get("page_index", "?")
                     b64 = img.get("image_base64") or img.get("base64", "")
-
                     with img_cols[col_idx]:
                         st.markdown(f"**{img_id}** (page {page})")
                         if b64:
-                            st.image(
-                                base64.b64decode(b64),
-                                caption=img_id,
-                                width="stretch",
-                            )
+                            st.image(base64.b64decode(b64), caption=img_id, width="stretch")
                         else:
                             st.caption("No base64 image data available.")
                         meta_keys = {
-                            k: v
-                            for k, v in img.items()
-                            if k not in ("image_base64", "base64")
+                            k: v for k, v in img.items() if k not in ("image_base64", "base64")
                         }
                         st.json(meta_keys)
         else:
-            st.info(
-                "No images extracted. Enable 'Include image extraction' in sidebar."
-            )
+            st.info("No images extracted. Enable 'Include image extraction' in sidebar.")
 
     # --- Per Page tab ---
     with tab_pages:
         st.markdown("### Per-page breakdown")
-
-        # Headers & Footers summary (v25.12 / OCR 4.0)
         has_headers = any(p.header for p in result.pages)
         has_footers = any(p.footer for p in result.pages)
         if has_headers or has_footers:
@@ -1070,16 +956,12 @@ def render_results():
                         "Header": p.header or "\u2014",
                         "Footer": p.footer or "\u2014",
                     })
-                st.dataframe(
-                    pd.DataFrame(hf_data),
-                    width="stretch",
-                    hide_index=True,
-                )
+                st.dataframe(pd.DataFrame(hf_data), width="stretch", hide_index=True)
 
         page_data = []
         for p in result.pages:
             page_tables = extract_markdown_tables(p.markdown)
-            row: dict = {
+            page_data.append({
                 "Page": p.page_index + 1,
                 "Characters": len(p.markdown),
                 "Words": len(p.markdown.split()),
@@ -1087,18 +969,15 @@ def render_results():
                 "Images": len(p.images),
                 "Blocks": len(p.blocks),
                 "Preview": p.markdown[:120].replace("\n", " "),
-            }
-            page_data.append(row)
-        st.dataframe(
-            pd.DataFrame(page_data), width="stretch", hide_index=True
-        )
+            })
+        st.dataframe(pd.DataFrame(page_data), width="stretch", hide_index=True)
 
-        # Page selector with rendered markdown
         if result.pages:
             page_idx = st.selectbox(
                 "View page markdown",
                 options=range(len(result.pages)),
                 format_func=lambda x: f"Page {x + 1}",
+                key=f"{key}_pagesel",
             )
             selected_page = result.pages[page_idx]
             st.markdown("---")
@@ -1108,7 +987,6 @@ def render_results():
             if selected_page.footer:
                 st.caption(f"**Footer:** {selected_page.footer}")
 
-            # OCR 4.0: content blocks (type + bounding box + confidence)
             if selected_page.blocks:
                 st.markdown("---")
                 st.markdown("#### \U0001f9e9 Content blocks (OCR 4.0)")
@@ -1122,11 +1000,8 @@ def render_results():
                         "Confidence": round(conf, 3) if isinstance(conf, (int, float)) else "\u2014",
                         "Content": str(text)[:80].replace("\n", " "),
                     })
-                st.dataframe(
-                    pd.DataFrame(block_rows), width="stretch", hide_index=True
-                )
+                st.dataframe(pd.DataFrame(block_rows), width="stretch", hide_index=True)
 
-            # OCR 4.0: inline confidence scores (page / word granularity)
             if selected_page.confidence_scores is not None:
                 with st.expander("\U0001f3af Confidence scores (OCR 4.0)", expanded=False):
                     st.json(selected_page.confidence_scores)
@@ -1134,7 +1009,6 @@ def render_results():
     # --- Annotations tab ---
     with tab_annotations:
         st.markdown("### Annotations")
-
         if result.document_annotation:
             st.markdown("#### Document-level Annotation")
             if isinstance(result.document_annotation, str):
@@ -1147,7 +1021,6 @@ def render_results():
         else:
             st.caption("No document annotation. Enable it in the sidebar.")
 
-        # BBox annotations from images
         bbox_images = [
             img for img in result.images
             if any(k not in ("id", "image_base64", "base64", "page_index") for k in img)
@@ -1168,170 +1041,108 @@ def render_results():
         raw = result.model_dump()
         raw["source"] = pdf_name
         st.json(raw)
-
         st.download_button(
             "Download full JSON",
             data=json.dumps(raw, indent=2, ensure_ascii=False),
-            file_name=f"{Path(pdf_name).stem}_ocr.json",
+            file_name=f"{Path(pdf_name).stem}_{key}_ocr.json",
             mime="application/json",
+            key=f"{key}_dl_json",
         )
 
     # ---- Save to extraction/ ----
     st.markdown("---")
-    save_cols = st.columns([1, 1])
-    with save_cols[0]:
-        if st.button("Save to extraction/ folder", width="stretch"):
-            out_dir = Path("extraction")
-            out_dir.mkdir(exist_ok=True)
-            stem = Path(pdf_name).stem
-
-            (out_dir / f"{stem}.md").write_text(
-                result.markdown, encoding="utf-8"
-            )
-
-            tables = extract_markdown_tables(result.markdown)
-            for i, df in enumerate(tables):
-                df.to_csv(out_dir / f"{stem}_table_{i + 1}.csv", index=False)
-
-            meta = {
-                "source": pdf_name,
-                "pages": len(result.pages),
-                "images": len(result.images),
-                "tables": len(tables),
-                "chars": len(result.markdown),
-                "words": len(result.markdown.split()),
-                "sections": len(extract_sections(result.markdown)),
-                "usage": result.usage,
-                "elapsed_ms": round(result.elapsed_ms, 1),
-            }
-            (out_dir / f"{stem}_meta.json").write_text(
-                json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-
-            # Save full JSON
-            full_json = result.model_dump()
-            full_json["source"] = pdf_name
-            (out_dir / f"{stem}_full.json").write_text(
-                json.dumps(full_json, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-
-            st.success(
-                f"Saved to extraction/{stem}.md + metadata + "
-                f"{len(tables)} CSV(s) + full JSON"
-            )
-
+    if st.button("Save to extraction/ folder", width="stretch", key=f"{key}_save"):
+        out_dir = Path("extraction")
+        out_dir.mkdir(exist_ok=True)
+        stem = f"{Path(pdf_name).stem}_{key}"
+        (out_dir / f"{stem}.md").write_text(result.markdown, encoding="utf-8")
+        tables = extract_markdown_tables(result.markdown)
+        for i, df in enumerate(tables):
+            df.to_csv(out_dir / f"{stem}_table_{i + 1}.csv", index=False)
+        meta = {
+            "source": pdf_name,
+            "model": key,
+            "pages": len(result.pages),
+            "images": len(result.images),
+            "tables": len(tables),
+            "chars": len(result.markdown),
+            "words": len(result.markdown.split()),
+            "sections": len(extract_sections(result.markdown)),
+            "usage": result.usage,
+            "elapsed_ms": round(result.elapsed_ms, 1),
+        }
+        (out_dir / f"{stem}_meta.json").write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        full_json = result.model_dump()
+        full_json["source"] = pdf_name
+        (out_dir / f"{stem}_full.json").write_text(
+            json.dumps(full_json, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        st.success(
+            f"Saved to extraction/{stem}.md + metadata + {len(tables)} CSV(s) + full JSON"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
-def page_extract() -> None:
-    _hero(
-        "Microsoft Azure AI Foundry \u00d7 Mistral AI",
-        'Extract with <span class="accent">Mistral Document AI</span>',
-        "Run a single model \u2014 OCR 4.0 or v25.12 \u2014 to pull text, tables, images and "
-        "structure from a PDF on Microsoft Foundry. Choose the model and options in the sidebar.",
-        [CHIP_AZURE, CHIP_MISTRAL, CHIP_API],
-    )
-    endpoint, api_key = render_connection()
-    opts = render_ocr_options(include_model=True)
-    render_history()
-    opts["endpoint"], opts["api_key"] = endpoint, api_key
-    model_key = opts["model_key"]
-    st.caption(
-        f"Active model: **Mistral Document AI {MODELS[model_key]['label']}** "
-        f"(`{get_deployment_name(model_key)}`). Need the full capability / pricing breakdown? "
-        "Open **Model comparison** in the sidebar."
-    )
-
-    pdf_bytes, pdf_name = file_input()
-
-    if pdf_bytes and endpoint:
-        if st.button(
-            f"Extract with {MODELS[model_key]['label']}",
-            type="primary",
-            width="stretch",
-        ):
-            progress_bar = st.progress(0.0, text="Preparing extraction\u2026")
-
-            def _on_progress(pct: float, msg: str) -> None:
-                progress_bar.progress(min(pct, 1.0), text=msg)
-
-            try:
-                progress_bar.progress(
-                    0.10, text=f"Sending to {MODELS[model_key]['label']}\u2026"
-                )
-                result = _run_ocr_for(model_key, pdf_bytes, pdf_name, opts, _on_progress)
-                progress_bar.progress(1.0, text="\u2705 Extraction complete!")
-                st.session_state["result"] = result
-                st.session_state["pdf_name"] = pdf_name
-                st.session_state["pdf_bytes"] = pdf_bytes
-                st.session_state["model_key"] = model_key
-                st.session_state["table_format"] = opts["table_format_val"]
-                st.session_state.pop("compare", None)
-            except Exception as exc:
-                progress_bar.progress(1.0, text="\u274c Extraction failed")
-                st.error(f"OCR extraction failed: {exc}")
-    elif not endpoint:
-        st.warning(
-            "Set your endpoint in the sidebar **Connection** (or MISTRAL_ENDPOINT in .env)."
-        )
-
-    if "result" in st.session_state:
-        render_results()
-
-
 def page_compare() -> None:
     _hero(
         "Two models \u00b7 one document \u00b7 side by side",
         'Compare <span class="accent">OCR 4.0</span> vs <span class="accent">v25.12</span>',
-        "Run <b>both</b> Mistral Document AI models on the same PDF and compare their markdown, "
-        "tables, images, timing and confidence \u2014 column by column. If one model is "
-        "unavailable, the other still renders.",
+        "Upload a PDF and run <b>both</b> Mistral Document AI models on it <b>in parallel</b>, "
+        "then compare their markdown, tables, images, timing and confidence \u2014 column by "
+        "column. If one model is unavailable, the other still renders.",
         [CHIP_MISTRAL, CHIP_AZURE, CHIP_API],
     )
     endpoint, api_key = render_connection()
-    opts = render_ocr_options(include_model=False)
+    opts = render_ocr_options()
     render_history()
     opts["endpoint"], opts["api_key"] = endpoint, api_key
 
     pdf_bytes, pdf_name = file_input()
 
-    if pdf_bytes and endpoint:
-        if st.button(
-            "\u2696\ufe0f Run both models",
-            type="primary",
-            width="stretch",
-            help="Run OCR 4.0 and v25.12 on this document and compare them side by side.",
-        ):
-            progress_bar = st.progress(0.0, text="Preparing comparison\u2026")
-            cmp_results: dict = {}
-            run_order = [("ocr4", "OCR 4.0"), ("2512", "v25.12")]
-            for i, (mk, lbl) in enumerate(run_order):
-                progress_bar.progress(
-                    i / len(run_order) + 0.05, text=f"Running {lbl}\u2026"
-                )
-                try:
-                    cmp_results[mk] = {
-                        "ok": True,
-                        "result": _run_ocr_for(mk, pdf_bytes, pdf_name, opts),
-                    }
-                except Exception as exc:
-                    cmp_results[mk] = {"ok": False, "error": str(exc)}
-                progress_bar.progress((i + 1) / len(run_order), text=f"{lbl} done")
-            progress_bar.progress(1.0, text="\u2705 Comparison complete!")
-            st.session_state["compare"] = cmp_results
-            st.session_state["compare_pdf_name"] = pdf_name
-            st.session_state.pop("result", None)
-    elif not endpoint:
+    ready = bool(pdf_bytes and endpoint and api_key)
+    if not endpoint or not api_key:
         st.warning(
-            "Set your endpoint in the sidebar **Connection** (or MISTRAL_ENDPOINT in .env)."
+            "Set your **endpoint** and **API key** in the sidebar **Connection** "
+            "(or `MISTRAL_ENDPOINT` / `AZURE_AI_KEY` in `.env`) to run the comparison."
         )
+    elif not pdf_bytes:
+        st.info("Upload a PDF or pick one from `data/` to compare the two models.")
+
+    if st.button(
+        "\u2696\ufe0f Run both models in parallel",
+        type="primary",
+        width="stretch",
+        disabled=not ready,
+        help="Run OCR 4.0 and v25.12 concurrently on this document and compare them side by side.",
+    ):
+        with st.spinner("Running OCR 4.0 and v25.12 in parallel\u2026"):
+            cmp_results: dict = {}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                futures = {
+                    ex.submit(_run_ocr_for, mk, pdf_bytes, pdf_name, opts): mk
+                    for mk in ("ocr4", "2512")
+                }
+                for fut in concurrent.futures.as_completed(futures):
+                    mk = futures[fut]
+                    try:
+                        cmp_results[mk] = {"ok": True, "result": fut.result()}
+                    except Exception as exc:
+                        cmp_results[mk] = {"ok": False, "error": str(exc)}
+        st.session_state["compare"] = cmp_results
+        st.session_state["compare_pdf_name"] = pdf_name
+        st.session_state["compare_pdf_bytes"] = pdf_bytes
+        st.session_state["compare_table_format"] = opts["table_format_val"]
 
     if "compare" in st.session_state:
         _render_comparison(
-            st.session_state["compare"], st.session_state.get("compare_pdf_name", "")
+            st.session_state["compare"],
+            st.session_state.get("compare_pdf_name", ""),
+            st.session_state.get("compare_pdf_bytes", b""),
+            st.session_state.get("compare_table_format"),
         )
 
 
@@ -1360,8 +1171,7 @@ def main() -> None:
     )
     nav = st.navigation(
         [
-            st.Page(page_extract, title="Extract", icon="\U0001f50d", default=True),
-            st.Page(page_compare, title="Compare models", icon="\u2696\ufe0f"),
+            st.Page(page_compare, title="Compare", icon="\u2696\ufe0f", default=True),
             st.Page(page_reference, title="Model comparison", icon="\U0001f4ca"),
         ]
     )

@@ -91,7 +91,7 @@ mistral-document-ai/
   .env.example                # Configuration template
   .streamlit/
     config.toml               # Azure + Mistral whole-UI theme (+ toolbarMode minimal)
-  app.py                      # Streamlit multipage UI: Extract / Compare models / Model comparison
+  app.py                      # Streamlit multipage UI: Compare (parallel two-model) / Model comparison
   demo_ocr.ipynb              # Jupyter notebook walkthrough
   src/
     extract.py                # Core OCR client (async, REST, multi-model)
@@ -192,42 +192,50 @@ uv run streamlit run app.py
 > Requires **Streamlit >= 1.58** (latest GA). The pin lives in `pyproject.toml`; run `uv sync`
 > (or `pip install -e .`) to upgrade an existing environment.
 
-A **custom-branded, multipage** web app that compares **two** Mistral Document AI models —
-**OCR 4.0** and **v25.12** — side by side on Microsoft Foundry. The **whole UI** is themed with the
-**Microsoft Azure** (`#0078D4`) and **Mistral AI** (flame `#FF6A13`) palettes via
-`.streamlit/config.toml` (tinted app background + branded sidebar) plus targeted CSS. The top-bar
-**Deploy** button and developer menu are hidden (`[client] toolbarMode = "minimal"`).
+A **custom-branded, multipage** web app whose entire purpose is to compare **two** Mistral Document
+AI models — **OCR 4.0** and **v25.12** — on the **same document, in parallel**, on Microsoft Foundry.
+The **whole UI** is themed with the **Microsoft Azure** (`#0078D4`) and **Mistral AI** (flame
+`#FF6A13`) palettes via `.streamlit/config.toml` (tinted app background + branded sidebar) plus
+targeted CSS. The top-bar **Deploy** button and developer menu are hidden
+(`[client] toolbarMode = "minimal"`).
 
 #### Navigation (left sidebar)
 
-Built with **`st.navigation`** (the current Streamlit multipage pattern) — three logical pages:
+Built with **`st.navigation`** (the current Streamlit multipage pattern) — two focused pages:
 
 | Page | Purpose |
 |------|---------|
-| 🔍 **Extract** | Run a **single** model (OCR 4.0 *or* v25.12) and explore the full result — overview, markdown, tables, images, per-page, annotations, raw JSON. |
-| ⚖️ **Compare models** | Run **both** models on the same PDF and compare them **side by side**. |
+| ⚖️ **Compare** *(default)* | Upload one PDF, then run **both** OCR 4.0 **and** v25.12 on it **in parallel** and explore both results in the viewport. |
 | 📊 **Model comparison** | Static **feature / limits / parameters / pricing** reference (moved out of the viewport into its own page). |
 
-Shared **Connection** (endpoint + key) and collapsible **OCR options** (model, advanced extraction,
-OCR 4.0 features, annotations) live in the sidebar and persist as you switch pages.
+There is **no single-model selector** — the app always runs both models, because comparing them *is*
+the point. The sidebar holds a shared **Connection** (endpoint + API key, **both required**) and
+collapsible **OCR options** (advanced extraction, OCR 4.0 features, annotations) that apply to the
+run and persist across pages.
 
-#### Highlights
+#### The Compare page
 
-- **Branded page heroes** — each page has an Azure → Mistral gradient hero that makes the two-model
-  comparison explicit.
+- **One click → both models, concurrently** — a `ThreadPoolExecutor` fires the two OCR calls at the
+  same time, so you wait for the slower model, not the sum of both. Each model is captured
+  independently, so if OCR 4.0 is temporarily unavailable (Preview 503), the v25.12 side still
+  renders (and vice-versa).
+- **Side-by-side summary** — two columns of per-model metrics (pages, words, tables, images, blocks,
+  latency) + a `.md` download, followed by a consolidated **diff table** (status, latency, pages,
+  words, tables, images, sections, content blocks, inline confidence).
+- **Per-model deep dive** — under the summary, a tab per model (**🟠 OCR 4.0** / **🔵 v25.12**) with
+  the full result: rendered markdown (raw-source toggle), table extraction with filtering + CSV
+  download, image grid (base64), per-page breakdown (incl. OCR 4.0 **content blocks** and **inline
+  confidence**), **annotations** (bbox per-image + document-level), raw JSON, and save to
+  `extraction/` (markdown, CSV, JSON — namespaced per model).
+
+#### Other highlights
+
+- **Branded page heroes** — Azure → Mistral gradient lockups that make the two-model comparison
+  explicit.
 - **Sample document viewer** — when you upload or pick a PDF, the app shows it inline in a native
   **`st.pdf`** viewer (Streamlit's built-in PDF component — no rasterization, no extra image libs)
   plus lightweight badges (page count, file size, and a `>30 pages → auto-chunked` hint) *before*
   extraction, so you can gauge how complex the document is.
-- **⚖️ Live side-by-side comparison** — on the **Compare models** page, one click runs **both**
-  OCR 4.0 **and** v25.12 and shows two columns: per-model metrics (latency, pages, words, tables,
-  images, sections, blocks, confidence), scrollable rendered markdown, per-result download, and a
-  consolidated diff table. Each model runs in its own `try/except`, so if OCR 4.0 is temporarily
-  unavailable (Preview 503), the v25.12 column still renders.
-- **Extract page** — rendered markdown with a raw-source toggle; table extraction with filtering,
-  DataFrame display, and CSV download; image grid (base64); per-page breakdown with word counts,
-  headers, footers; **Annotations** (bbox per-image + document-level); raw JSON; and save to
-  `extraction/` (markdown, CSV, JSON).
 - **OCR options** (sidebar): `table_format`, `extract_header`, `extract_footer`, `pages`,
   `image_limit`; OCR 4.0-only content blocks + bounding boxes (`include_blocks`) and inline
   confidence scores (`confidence_scores_granularity`).
@@ -243,6 +251,10 @@ Two options:
 | **Azure AD** | Run `az login`, leave `AZURE_AI_KEY` empty    |
 
 Azure AD (DefaultAzureCredential) is recommended for production.
+
+> **Note** — the **Streamlit Compare app requires an API key** (endpoint + key are both mandatory in
+> the sidebar). Azure AD remains fully supported for the Python library / notebook (`ocr_pdf` with
+> `AZURE_AI_KEY` empty).
 
 ## API Reference
 
