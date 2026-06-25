@@ -712,7 +712,7 @@ def file_input() -> tuple[bytes | None, str]:
 # Reference content (moved out of the viewport into its own page)
 # ---------------------------------------------------------------------------
 def render_reference():
-    st.markdown("### v25.12 vs OCR 4.0 — Feature Comparison")
+    st.markdown("### v25.12 vs OCR 4.0 — Feature Matrix")
     st.markdown(
         """
 | Feature | v25.12 (`mistral-document-ai-2512`) | OCR 4.0 (`mistral-ocr-4-0`) |
@@ -1148,10 +1148,11 @@ def page_compare() -> None:
 
 def page_reference() -> None:
     _hero(
-        "Reference \u00b7 capabilities, limits & parameters",
-        'OCR 4.0 vs v25.12 \u2014 <span class="accent">feature reference</span>',
-        "Side-by-side capabilities, Microsoft Foundry API limits, request parameters and "
-        "pricing \u2014 everything you need to choose between the two Mistral Document AI models.",
+        "Feature matrix \u00b7 capabilities, limits & parameters",
+        'OCR 4.0 vs v25.12 \u2014 <span class="accent">feature matrix</span>',
+        "A static side-by-side <strong>capability matrix</strong> \u2014 supported features, Microsoft "
+        "Foundry API limits, request parameters and pricing. No document run here; use "
+        "<strong>Compare</strong> to run both models live on a PDF.",
         [CHIP_AZURE, CHIP_MISTRAL, CHIP_API],
     )
     render_reference()
@@ -1172,7 +1173,7 @@ def main() -> None:
     nav = st.navigation(
         [
             st.Page(page_compare, title="Compare", icon="\u2696\ufe0f", default=True),
-            st.Page(page_reference, title="Model comparison", icon="\U0001f4ca"),
+            st.Page(page_reference, title="Feature matrix", icon="\U0001f4ca"),
         ]
     )
     nav.run()
