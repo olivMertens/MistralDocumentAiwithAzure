@@ -1,291 +1,199 @@
-# Mistral Document AI on Azure — OCR 4.0 vs v25.12 (OCR demo on Microsoft Foundry)
+<div align="center">
 
-Standalone, self-contained project demonstrating **Mistral Document AI** OCR deployed and served through **Microsoft Foundry**.
+# 📄 Mistral Document AI on Azure
 
-This project leverages **Microsoft Foundry** as the hosting platform to deploy Mistral's Document AI models via the REST API. Both model versions are deployed as **GlobalStandard** SKU endpoints in the same Foundry project.
+### OCR 4.0 vs v25.12 — a side‑by‑side OCR demo on Microsoft Foundry
 
-Extract text, tables, and images from PDF documents using Python. Supports both **v25.12** (table_format, header/footer extraction, enhanced annotations) and **OCR 4.0** (paragraph bounding boxes, block classification, inline confidence scores, 170 languages).
+[![Azure AI Foundry](https://img.shields.io/badge/Microsoft-Foundry-0078D4?logo=microsoftazure&logoColor=white)](https://ai.azure.com/)
+[![Mistral Document AI](https://img.shields.io/badge/Mistral-Document%20AI-FF6A13?logo=mistralai&logoColor=white)](https://mistral.ai/news/ocr-4/)
+[![Streamlit 1.58+](https://img.shields.io/badge/Streamlit-1.58%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![uv](https://img.shields.io/badge/packaged%20with-uv-DE5FE9?logo=uv&logoColor=white)](https://github.com/astral-sh/uv)
 
-## Why Microsoft Foundry?
+Extract **text, tables, images, layout blocks and confidence scores** from PDFs with two Mistral
+Document AI models — and compare them on the **same document, in parallel**.
 
-- **Managed deployment** — deploy Mistral models with a single CLI command, no infrastructure to manage
-- **GlobalStandard SKU** — pay-per-token pricing with automatic scaling
-- **Enterprise security** — Azure AD / Managed Identity authentication, VNET integration, private endpoints
-- **Unified endpoint** — both model versions share the same Foundry account endpoint
+<img src="docs/screenshot-compare.png" alt="Compare OCR 4.0 vs v25.12 — Streamlit app" width="900">
 
-## Available Models
+</div>
 
-| Model | Version | Deployment Name | Key Features |
-|-------|---------|-----------------|-------------|
-| Mistral Document AI 2512 | v25.12 | `mistral-document-ai-2512` | OCR, images, bbox annotations, `table_format`, `extract_header/footer` |
-| Mistral Document AI OCR 4.0 | 4.0 (Preview) | `mistral-ocr-4-0` | + paragraph bounding boxes, block classification, inline confidence scores, 170 languages, streaming API |
+---
 
-> **OCR 4.0 requires a GlobalStandard (or DataZoneStandard) deployment** and is currently in **Preview**.
+## ✨ What's inside
 
-## v25.12 vs OCR 4.0 — Detailed Comparison
+- 🔀 **Two models, one document, side by side** — run **OCR 4.0** and **v25.12** **in parallel** and diff their output column by column.
+- 🎨 **Branded Streamlit app** — Azure × Mistral theme, native PDF viewer, no model selector (it always runs both).
+- 🧱 **Latest OCR 4.0 features** — paragraph bounding boxes, block classification, inline confidence scores, 170 languages, streaming.
+- ⚙️ **Reusable Python client** — async REST client (`src/extract.py`), CLI, and a Jupyter notebook.
+- ☁️ **Microsoft Foundry native** — both models as **GlobalStandard** deployments on one endpoint, API‑key or Azure AD auth.
+
+## 🤖 Models at a glance
+
+| Model | Version | Deployment | Highlights |
+|-------|---------|------------|-----------|
+| 🔵 Mistral Document AI 2512 | `v25.12` · **GA** | `mistral-document-ai-2512` | OCR, images, bbox annotations, `table_format`, header/footer |
+| 🟠 Mistral Document AI OCR 4.0 | `4.0` · **Preview** | `mistral-ocr-4-0` | **+** paragraph bboxes, block classification, inline confidence, 170 languages, streaming |
+
+> 💡 OCR 4.0 requires a **GlobalStandard** (or DataZoneStandard) deployment and is currently in **Preview**.
+
+## 🚀 Quick start
+
+```bash
+# 1. Deploy both models + write .env automatically
+./scripts/deploy_all.sh --account-name "my-ai-foundry" --resource-group "rg-demo"
+#  (PowerShell) .\scripts\deploy_all.ps1 -AccountName "my-ai-foundry" -ResourceGroup "rg-demo"
+
+# 2. Install dependencies (uv)
+uv venv --python 3.12
+uv sync
+
+# 3. Launch the app
+uv run streamlit run app.py
+```
+
+<details>
+<summary>🔧 Already deployed? Generate <code>.env</code> from an existing account</summary>
+
+```bash
+# Bash
+./scripts/setup_env.sh --account-name "my-ai-foundry" --resource-group "rg-demo"
+# PowerShell
+.\scripts\setup_env.ps1 -AccountName "my-ai-foundry" -ResourceGroup "rg-demo"
+```
+
+This discovers the endpoint, deployment names and API key and writes `.env`. For Azure AD auth
+(recommended for production) add `--auth aad` / `-AuthMode "aad"`. Or copy `cp .env.example .env`
+and edit it manually.
+
+</details>
+
+<details>
+<summary>📦 Other entry points — CLI, sample PDF, notebook</summary>
+
+```bash
+# Generate a complex sample PDF (tables + charts)
+uv sync --extra scripts
+uv run python scripts/generate_sample_pdf.py    # -> data/sample_complex_report.pdf
+
+# Batch-extract every PDF in data/ (markdown + JSON + CSV into extraction/)
+uv run extract
+
+# Interactive notebook walkthrough
+uv sync --extra notebook
+uv run jupyter lab demo_ocr.ipynb
+```
+
+</details>
+
+## 🖥️ The Streamlit app
+
+> Requires **Streamlit ≥ 1.58** (latest GA, pinned in `pyproject.toml`). The whole UI is themed with
+> the **Azure** (`#0078D4`) and **Mistral** (`#FF6A13`) palettes; the Deploy button and dev menu are hidden.
+
+Built with **`st.navigation`** — two focused pages:
+
+| Page | What it does |
+|------|--------------|
+| ⚖️ **Compare** *(default)* | Pick or upload a PDF → run **both** models **in parallel** → explore both results column by column. |
+| 📊 **Feature matrix** | Static capability / limits / parameters / pricing matrix comparing the two models. |
+
+**On the Compare page:**
+
+- ⚡ **One click → both models, concurrently** (`ThreadPoolExecutor`) — you wait for the slower model, not the sum. If OCR 4.0 is briefly unavailable (Preview 503), the v25.12 side still renders.
+- 📊 **Side‑by‑side summary** — per‑model metrics (pages, words, tables, images, blocks, latency) + a consolidated **diff table**.
+- 🔎 **Per‑model deep dive** — a tab per model (🟠 OCR 4.0 / 🔵 v25.12): rendered markdown, table extraction + CSV, image grid, per‑page breakdown (incl. blocks + inline confidence), annotations, and raw JSON.
+- 👀 **Native PDF viewer** — the selected document is shown inline via `st.pdf` *before* extraction, with page‑count / size badges and a `>30 pages → auto‑chunked` hint.
+- 🔌 **Shared sidebar** — Connection (**endpoint + API key, both required**) and collapsible OCR options that persist across pages.
+
+<div align="center">
+<img src="docs/screenshot-feature-matrix.png" alt="Feature matrix page" width="820">
+</div>
+
+## 🔬 OCR 4.0 vs v25.12
+
+| | v25.12 | OCR 4.0 |
+|---|:---:|:---:|
+| Status | GA | Preview |
+| Markdown · images · hyperlinks | ✅ | ✅ |
+| Paragraph bounding boxes | ❌ | ✅ |
+| Block classification | ❌ | ✅ |
+| Inline confidence scores | ❌ | ✅ |
+| Streaming API | ❌ | ✅ |
+| Languages | 25+ | **170** |
+| `table_format` | `markdown` / `html` | `markdown` / `markdown-tables` / `html` |
+
+<details>
+<summary>📋 Full feature matrix & Foundry API limits</summary>
 
 | Feature | v25.12 (`mistral-document-ai-2512`) | OCR 4.0 (`mistral-ocr-4-0`) |
 |---------|----------------------------|----------------------------|
 | **OCR engine** | `mistral-ocr-2512` + `mistral-small-2506` | `mistral-ocr-4-0` (+ Mistral Medium 3.5 annotations) |
 | **Status** | GA | Preview |
-| **Markdown output** | Yes | Yes |
-| **Image extraction (bbox)** | Yes | Yes |
-| **Paragraph bounding boxes** | No | Yes — per-paragraph layout coordinates |
-| **Block classification** | No | Yes — title, header, footer, code, table, equation, paragraph, list, signature, image, caption, references |
-| **Inline confidence scores** | No | Yes — per-page / per-word confidence |
-| **Hyperlink detection** | Yes | Yes |
-| **`table_format` parameter** | `null` / `"markdown"` / `"html"` | `null` / `"markdown"` / `"markdown-tables"` / `"html"` (colspan/rowspan) |
-| **`extract_header` / `extract_footer`** | Yes | Yes |
-| **`pages` selection** | Yes — select specific pages (0-indexed) | Yes |
-| **`image_limit`** | Yes | Yes |
+| **Markdown output** | ✅ | ✅ |
+| **Image extraction (bbox)** | ✅ | ✅ |
+| **Paragraph bounding boxes** | ❌ | ✅ — per-paragraph layout coordinates |
+| **Block classification** | ❌ | ✅ — title, header, footer, code, table, equation, paragraph, list, signature, image, caption, references |
+| **Inline confidence scores** | ❌ | ✅ — per-page / per-word confidence |
+| **Hyperlink detection** | ✅ | ✅ |
+| **`table_format`** | `null` / `"markdown"` / `"html"` | `null` / `"markdown"` / `"markdown-tables"` / `"html"` (colspan/rowspan) |
+| **`extract_header` / `extract_footer`** | ✅ | ✅ |
+| **`pages` selection** | ✅ | ✅ |
+| **`image_limit`** | ✅ | ✅ |
 | **BBox / Document annotations** | JSON Schema structured output | JSON Schema structured output |
-| **Streaming API** | No | Yes — redesigned, reduced time-to-first-token |
+| **Streaming API** | ❌ | ✅ — reduced time-to-first-token |
 | **Multilingual accuracy** | 99%+ across 25+ languages | **170 languages** |
 | **Supported formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | PDF, PNG, JPEG, AVIF, PPTX, DOCX |
 | **Deployment SKU** | GlobalStandard | GlobalStandard / DataZoneStandard |
 | **Pricing (Global Standard)** | per Foundry pricing | $4 / 1K pages (OCR) · $5 / 1K pages (OCR + annotations) |
 
-> **Note**: `table_format`, `extract_header`, and `extract_footer` parameters are available with **OCR 2512 and OCR 4.0** ([source](https://docs.mistral.ai/capabilities/document_ai/basic_ocr)).
-
-### API Limits (Microsoft Foundry)
+**API limits (Microsoft Foundry)**
 
 | Limit | Value | Notes |
 |-------|-------|-------|
-| **Max file size** | **30 MB** per request | Applies to both v25.12 and OCR 4.0 on Microsoft Foundry |
-| **Max pages per request** | **30 pages** | Documents >30 pages are auto-chunked by this project |
+| **Max file size** | **30 MB** per request | Both models |
+| **Max pages per request** | **30 pages** | Documents > 30 pages are auto-chunked by this project |
 | **Annotations page limit** | **8 pages** | `document_annotation` processes only the first 8 pages |
-| **Supported input formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | Images count as 1 page |
+| **Supported formats** | PDF, PNG, JPEG, AVIF, PPTX, DOCX | Images count as 1 page |
 
-> Documents exceeding 30 pages are automatically split into chunks and processed sequentially — results are merged transparently. See [Large PDFs](#large-pdfs-30-pages) below.
+</details>
 
-## Documentation & Resources
+## 🔐 Authentication
 
-### Mistral Documentation
+| Method | Setup |
+|--------|-------|
+| 🔑 **API key** | Set `AZURE_AI_KEY` in `.env` |
+| 🛡️ **Azure AD** | `az login`, leave `AZURE_AI_KEY` empty (DefaultAzureCredential) |
 
-- [Document AI — Overview](https://docs.mistral.ai/capabilities/document_ai) — capabilities and model overview
-- [Document AI — OCR Processor](https://docs.mistral.ai/capabilities/document_ai/basic_ocr) — OCR API reference, parameters, and code examples
-- [Document AI — Annotations](https://docs.mistral.ai/capabilities/document_ai/annotations) — structured extraction, bbox/document annotations, JSON schemas
-- [Document AI — Document Q&A](https://docs.mistral.ai/capabilities/document_ai/document_qna) — question answering on documents
-- [OCR API Reference](https://docs.mistral.ai/api/endpoint/ocr) — REST API endpoint specification
+> The **Streamlit Compare app requires an API key** (endpoint + key are both mandatory in the sidebar).
+> Azure AD remains fully supported for the Python library / notebook (`ocr_pdf` with `AZURE_AI_KEY` empty).
 
-### Microsoft Foundry
+## 🔌 API reference
 
-- [Microsoft Foundry documentation](https://learn.microsoft.com/azure/ai-services/)
-- [Mistral Document AI OCR 4.0 — Azure Model Card](https://ai.azure.com/catalog/models/mistral-ocr-4-0)
-- [Mistral Document AI 2512 — Azure Model Card](https://ai.azure.com/explore/models/mistral-document-ai-2512/version/1/registry/azureml-mistral)
-- [Mistral Document AI with OCR 4 and Mistral Medium 3.5 arrive in Microsoft Foundry](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/mistral-document-ai-with-ocr-4-and-mistral-medium-3-5-arrive-in-microsoft-foundr/4529863) — official announcement
-- [Mistral OCR 4 — release announcement](https://mistral.ai/news/ocr-4/)
-- [Unlocking Document Understanding with Mistral Document AI in Microsoft Foundry](https://azurefeeds.com/2025/06/24/unlocking-document-understanding-with-mistral-document-ai-in-microsoft-foundry/) — community walkthrough
-
-### Cookbooks
-
-- [Data Extraction with Structured Outputs](https://colab.research.google.com/github/mistralai/cookbook/blob/main/mistral/ocr/data_extraction.ipynb)
-- [Tool Use with OCR](https://colab.research.google.com/github/mistralai/cookbook/blob/main/mistral/ocr/tool_usage.ipynb)
-- [Batch OCR](https://colab.research.google.com/github/mistralai/cookbook/blob/main/mistral/ocr/batch_ocr.ipynb)
-
-## Project Structure
-
-```text
-mistral-document-ai/
-  pyproject.toml              # uv / pip dependencies (Streamlit >= 1.58)
-  .env.example                # Configuration template
-  .streamlit/
-    config.toml               # Azure + Mistral whole-UI theme (+ toolbarMode minimal)
-  app.py                      # Streamlit multipage UI: Compare (parallel two-model) / Feature matrix
-  demo_ocr.ipynb              # Jupyter notebook walkthrough
-  src/
-    extract.py                # Core OCR client (async, REST, multi-model)
-  scripts/
-    deploy_all.ps1            # Deploy both models + auto-generate .env
-    deploy_all.sh             # Deploy both models (Bash)
-    setup_env.ps1             # Resolve existing deployments → .env
-    setup_env.sh              # Resolve existing deployments → .env (Bash)
-    generate_sample_pdf.py    # Generate sample PDF with tables
-  data/                       # Place your PDF files here
-  extraction/                 # OCR output (markdown, CSV, JSON)
-```
-
-## Quick Start
-
-### 1. Deploy Both Models
-
-```powershell
-# PowerShell - deploys both models and writes .env automatically
-.\scripts\deploy_all.ps1 -AccountName "my-ai-foundry" -ResourceGroup "rg-demo"
-```
-
-```bash
-# Bash
-./scripts/deploy_all.sh --account-name "my-ai-foundry" --resource-group "rg-demo"
-```
-
-This creates `mistral-document-ai-2512` and `mistral-ocr-4-0` deployments and writes the `.env` file with endpoint, deployments, and API key.
-
-### 2. Generate .env (if models already deployed)
-
-If the models are already deployed, resolve all configuration automatically:
-
-```powershell
-# PowerShell
-.\scripts\setup_env.ps1 -AccountName "my-ai-foundry" -ResourceGroup "rg-demo"
-```
-
-```bash
-# Bash
-./scripts/setup_env.sh --account-name "my-ai-foundry" --resource-group "rg-demo"
-```
-
-This discovers the endpoint, deployment names, and API key from your Foundry account and writes `.env`.
-
-For Azure AD authentication (recommended for production), use `--auth aad` / `-AuthMode "aad"`.
-
-Alternatively, copy and edit manually:
-
-```bash
-cp .env.example .env
-# Edit .env with your endpoint and key
-```
-
-### 3. Install Dependencies
-
-```bash
-uv venv --python 3.12           # create a virtual environment with Python 3.12
-# On Windows:  .venv\Scripts\activate
-# On Linux/macOS:  source .venv/bin/activate
-uv sync                          # install all dependencies
-```
-
-### 4. Generate Sample PDF (Optional)
-
-```bash
-uv sync --extra scripts          # installs matplotlib for chart generation
-uv run python scripts/generate_sample_pdf.py
-```
-
-Creates `data/sample_complex_report.pdf` — a multi-page document with tables, plot charts (bar, line, pie), ASCII art diagrams, and mixed text sections.
-
-### 5. Extract PDFs (CLI)
-
-Place PDF files in `data/`, then:
-
-```bash
-uv run extract
-```
-
-Results (markdown + metadata JSON + CSVs) appear in `extraction/`.
-
-### 6. Jupyter Notebook
-
-```bash
-uv sync --extra notebook
-uv run jupyter lab demo_ocr.ipynb
-```
-
-Interactive walkthrough: select model version, run OCR, view markdown, parse tables, inspect images, per-page analysis, annotations demo, and model comparison.
-
-### 7. Streamlit UI
-
-```bash
-uv run streamlit run app.py
-```
-
-> Requires **Streamlit >= 1.58** (latest GA). The pin lives in `pyproject.toml`; run `uv sync`
-> (or `pip install -e .`) to upgrade an existing environment.
-
-A **custom-branded, multipage** web app whose entire purpose is to compare **two** Mistral Document
-AI models — **OCR 4.0** and **v25.12** — on the **same document, in parallel**, on Microsoft Foundry.
-The **whole UI** is themed with the **Microsoft Azure** (`#0078D4`) and **Mistral AI** (flame
-`#FF6A13`) palettes via `.streamlit/config.toml` (tinted app background + branded sidebar) plus
-targeted CSS. The top-bar **Deploy** button and developer menu are hidden
-(`[client] toolbarMode = "minimal"`).
-
-#### Navigation (left sidebar)
-
-Built with **`st.navigation`** (the current Streamlit multipage pattern) — two focused pages:
-
-| Page | Purpose |
-|------|---------|
-| ⚖️ **Compare** *(default)* | Upload one PDF, then run **both** OCR 4.0 **and** v25.12 on it **in parallel** and explore both results in the viewport. |
-| 📊 **Feature matrix** | Static **capability / limits / parameters / pricing** matrix comparing the two models (no document run — that lives on **Compare**). |
-
-There is **no single-model selector** — the app always runs both models, because comparing them *is*
-the point. The sidebar holds a shared **Connection** (endpoint + API key, **both required**) and
-collapsible **OCR options** (advanced extraction, OCR 4.0 features, annotations) that apply to the
-run and persist across pages.
-
-#### The Compare page
-
-- **One click → both models, concurrently** — a `ThreadPoolExecutor` fires the two OCR calls at the
-  same time, so you wait for the slower model, not the sum of both. Each model is captured
-  independently, so if OCR 4.0 is temporarily unavailable (Preview 503), the v25.12 side still
-  renders (and vice-versa).
-- **Side-by-side summary** — two columns of per-model metrics (pages, words, tables, images, blocks,
-  latency) + a `.md` download, followed by a consolidated **diff table** (status, latency, pages,
-  words, tables, images, sections, content blocks, inline confidence).
-- **Per-model deep dive** — under the summary, a tab per model (**🟠 OCR 4.0** / **🔵 v25.12**) with
-  the full result: rendered markdown (raw-source toggle), table extraction with filtering + CSV
-  download, image grid (base64), per-page breakdown (incl. OCR 4.0 **content blocks** and **inline
-  confidence**), **annotations** (bbox per-image + document-level), raw JSON, and save to
-  `extraction/` (markdown, CSV, JSON — namespaced per model).
-
-#### Other highlights
-
-- **Branded page heroes** — Azure → Mistral gradient lockups that make the two-model comparison
-  explicit.
-- **Sample document viewer** — when you upload or pick a PDF, the app shows it inline in a native
-  **`st.pdf`** viewer (Streamlit's built-in PDF component — no rasterization, no extra image libs)
-  plus lightweight badges (page count, file size, and a `>30 pages → auto-chunked` hint) *before*
-  extraction, so you can gauge how complex the document is.
-- **OCR options** (sidebar): `table_format`, `extract_header`, `extract_footer`, `pages`,
-  `image_limit`; OCR 4.0-only content blocks + bounding boxes (`include_blocks`) and inline
-  confidence scores (`confidence_scores_granularity`).
-- **Extraction history** in the sidebar.
-
-## Authentication
-
-Two options:
-
-| Method       | Setup                                         |
-| ------------ | --------------------------------------------- |
-| **API Key**  | Set `AZURE_AI_KEY` in `.env`                  |
-| **Azure AD** | Run `az login`, leave `AZURE_AI_KEY` empty    |
-
-Azure AD (DefaultAzureCredential) is recommended for production.
-
-> **Note** — the **Streamlit Compare app requires an API key** (endpoint + key are both mandatory in
-> the sidebar). Azure AD remains fully supported for the Python library / notebook (`ocr_pdf` with
-> `AZURE_AI_KEY` empty).
-
-## API Reference
-
-The core OCR call is a single REST endpoint:
+<details>
+<summary>REST endpoint, request body & OCR 4.0 example</summary>
 
 ```text
 POST {endpoint}/providers/mistral/azure/ocr?api-version=2024-05-01-preview
 ```
 
-Request body:
-
 ```json
 {
   "model": "mistral-document-ai-2512",
-  "document": {
-    "type": "document_url",
-    "document_url": "data:application/pdf;base64,{base64_pdf}"
-  },
+  "document": { "type": "document_url", "document_url": "data:application/pdf;base64,{base64_pdf}" },
   "include_image_base64": true,
   "table_format": "markdown",
   "extract_header": true,
   "extract_footer": true,
-  "bbox_annotation_format": { "type": "json_schema", "json_schema": { "name": "ImageDescription", "schema": {...}, "strict": true } },
-  "document_annotation_format": { "type": "json_schema", "json_schema": { "name": "DocumentSummary", "schema": {...}, "strict": true } },
+  "bbox_annotation_format": { "type": "json_schema", "json_schema": { "name": "ImageDescription", "schema": {}, "strict": true } },
+  "document_annotation_format": { "type": "json_schema", "json_schema": { "name": "DocumentSummary", "schema": {}, "strict": true } },
   "document_annotation_prompt": "Summarize this document."
 }
 ```
 
-Response contains `pages[]` with `markdown`, `images[]`, `tables[]`, `hyperlinks[]`, `header`, `footer`, `dimensions` per page, plus top-level `document_annotation`. **OCR 4.0** additionally returns `pages[].blocks` (when `include_blocks` is set) and `pages[].confidence_scores` (when `confidence_scores_granularity` is set).
-
-**OCR 4.0 example** (block classification + confidence scores):
+The response contains `pages[]` with `markdown`, `images[]`, `tables[]`, `hyperlinks[]`, `header`,
+`footer`, `dimensions`, plus top-level `document_annotation`. **OCR 4.0** additionally returns
+`pages[].blocks` (when `include_blocks` is set) and `pages[].confidence_scores` (when
+`confidence_scores_granularity` is set):
 
 ```json
 {
@@ -296,134 +204,30 @@ Response contains `pages[]` with `markdown`, `images[]`, `tables[]`, `hyperlinks
 }
 ```
 
+</details>
 
-### Advanced Features (v25.12 / OCR 4.0)
-
-These parameters are supported with **`mistral-document-ai-2512`** and **`mistral-ocr-4-0`**.
+<details>
+<summary>⚙️ Request parameters (v25.12 / OCR 4.0)</summary>
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `table_format` | `"markdown"` \| `"html"` \| `null` | `null` | Structured table output format (see below) |
-| `extract_header` | `bool` | `false` | Extract page headers into a separate `header` field |
-| `extract_footer` | `bool` | `false` | Extract page footers into a separate `footer` field |
-| `pages` | `list[int]` | all pages | Select specific pages to process (0-indexed) |
-| `image_limit` | `int` | unlimited | Maximum number of images to return across the document |
-| `include_blocks` | `bool` | `false` | **OCR 4.0 only** — return content blocks with bounding boxes + type classification into `pages[].blocks` |
-| `confidence_scores_granularity` | `"page"` \| `"word"` \| `null` | `null` | **OCR 4.0 only** — return inline confidence scores into `pages[].confidence_scores` |
+| `table_format` | `"markdown"` \| `"html"` \| `null` | `null` | Structured table output (also added to `pages[].tables[]`) |
+| `extract_header` | `bool` | `false` | Extract page headers into `pages[].header` |
+| `extract_footer` | `bool` | `false` | Extract page footers into `pages[].footer` |
+| `pages` | `list[int]` | all | Select specific pages (0-indexed) |
+| `image_limit` | `int` | unlimited | Max images returned across the document |
+| `include_blocks` | `bool` | `false` | **OCR 4.0** — content blocks with bbox + type into `pages[].blocks` (layout-aware pipelines, RAG chunking, citations) |
+| `confidence_scores_granularity` | `"page"` \| `"word"` \| `null` | `null` | **OCR 4.0** — inline confidence into `pages[].confidence_scores` (human-in-the-loop QA, error flagging) |
 
-#### `table_format` — structured table output
+</details>
 
-Controls how tables are returned in the response:
+<details>
+<summary>🏷️ Annotations (structured extraction via JSON Schema)</summary>
 
-| Value | Behaviour |
-|-------|-----------|
-| `null` (default) | Tables are embedded **inline** in the page markdown as pipe tables (`\| col \| col \|`) |
-| `"markdown"` | Tables are **also** returned as separate entries in `pages[].tables[]`, each containing a `markdown` key with a standalone markdown table. Useful for programmatic extraction. |
-| `"html"` | Same as above, but each table entry contains an `html` key with a `<table>` element — preserves `colspan`, `rowspan`, and merged cells better than markdown. |
+Annotations extract structured data from images (bbox) or the whole document. **Limited to the first 8 pages.**
 
-> When `table_format` is set, tables still appear inline in `pages[].markdown`, but are additionally structured in `pages[].tables[]` for easier downstream parsing.
-
-#### `extract_header` / `extract_footer`
-
-When enabled, each page in the response includes:
-
-- `header` — the repeated header text at the top of the page (e.g. document title, chapter name)
-- `footer` — the repeated footer text (e.g. page numbers, disclaimers, confidentiality notices)
-
-These are returned as plain strings in `pages[].header` and `pages[].footer`. If a page has no header/footer, the field is `null`.
-
-#### `pages` — selective extraction
-
-Pass a list of **0-indexed** page numbers to extract only specific pages:
-
-```json
-{ "pages": [0, 2, 4] }
-```
-
-This extracts pages 1, 3, and 5 only — useful for large documents where you only need certain sections.
-
-#### `image_limit`
-
-Caps the total number of images returned across all pages. Useful to reduce response size when you only need the text/tables. Set to `0` or omit to return all images.
-
-#### `include_blocks` — content blocks (OCR 4.0)
-
-**OCR 4.0 only.** When `true`, each page returns a `blocks` array of paragraph-level
-content blocks, each with a **bounding box** and a **type classification** (title,
-paragraph, table, equation, signature, list, caption, ...):
-
-```json
-{ "include_blocks": true }
-```
-
-```json
-"blocks": [
-  { "type": "title",     "bbox": [x0, y0, x1, y1], "content": "...", "confidence": 0.98 },
-  { "type": "paragraph", "bbox": [x0, y0, x1, y1], "content": "...", "confidence": 0.95 }
-]
-```
-
-Ideal for **layout-aware pipelines, semantic chunking (RAG), and citation management**.
-Older models (v25.12) return `blocks` as `null`.
-
-#### `confidence_scores_granularity` — inline confidence (OCR 4.0)
-
-**OCR 4.0 only.** Set to `"page"` or `"word"` to return inline confidence scores into
-`pages[].confidence_scores`. Use it for **human-in-the-loop QA** and **automated error
-flagging** (e.g. route low-confidence pages for review). `"word"` is the most detailed
-(and the largest response). Older models return `confidence_scores` as `null`.
-
-```json
-{ "confidence_scores_granularity": "page" }
-```
-
----
-
-### Annotations
-
-Annotations use **JSON Schema** to extract structured data from images (bbox) or the entire document.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `bbox_annotation_format` | JSON Schema | Applied to **each image** — classify and describe individual images |
-| `document_annotation_format` | JSON Schema | Applied to the **entire document** — extract a structured summary |
-| `document_annotation_prompt` | `string` | Optional prompt guiding the document-level annotation |
-
-> **Limit**: Annotations are processed on the **first 8 pages** only (both Azure and La Plateforme).
-
-#### How annotations work
-
-**1. BBox annotations** (`bbox_annotation_format`) — per-image structured extraction:
-
-You provide a JSON Schema describing what you want extracted from each image. Mistral applies it to every image found in the document and returns the structured result alongside the image data.
-
-```json
-{
-  "bbox_annotation_format": {
-    "type": "json_schema",
-    "json_schema": {
-      "name": "ImageDescription",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "image_type": { "type": "string", "description": "Type: bar chart, photo, logo, table, etc." },
-          "summary": { "type": "string", "description": "Brief summary of image content" },
-          "is_relevant": { "type": "boolean", "description": "Whether this image is relevant" }
-        },
-        "required": ["image_type", "summary", "is_relevant"],
-        "additionalProperties": false
-      },
-      "strict": true
-    }
-  }
-}
-```
-
-Each image in `pages[].images[]` will then include the structured annotation fields alongside `image_base64` and `id`.
-
-**2. Document annotations** (`document_annotation_format` + `document_annotation_prompt`) — whole-document extraction:
-
-You provide a JSON Schema for the entire document. Mistral reads all content (text + images) and returns a single structured object.
+- **BBox annotations** (`bbox_annotation_format`) — applied to **each image**: classify/describe charts, photos, logos, tables… returned alongside the image base64.
+- **Document annotations** (`document_annotation_format` + `document_annotation_prompt`) — applied to the **whole document**: one structured JSON object (classification, entity extraction, invoice parsing, compliance tagging).
 
 ```json
 {
@@ -434,9 +238,9 @@ You provide a JSON Schema for the entire document. Mistral reads all content (te
       "schema": {
         "type": "object",
         "properties": {
-          "topics": { "type": "array", "items": { "type": "string" }, "description": "Key topics" },
-          "entities": { "type": "array", "items": { "type": "string" }, "description": "Named entities" },
-          "summary": { "type": "string", "description": "One-paragraph summary" }
+          "topics":   { "type": "array", "items": { "type": "string" } },
+          "entities": { "type": "array", "items": { "type": "string" } },
+          "summary":  { "type": "string" }
         },
         "required": ["topics", "entities", "summary"],
         "additionalProperties": false
@@ -448,19 +252,37 @@ You provide a JSON Schema for the entire document. Mistral reads all content (te
 }
 ```
 
-The result is returned in the top-level `document_annotation` field of the response.
+The result is returned in the top-level `document_annotation` field. **Uses**: document classification,
+invoice field extraction, contract clause detection, chart-to-table conversion, compliance tagging.
 
-**Practical uses**: document classification, invoice field extraction, contract clause detection, chart-to-table conversion, compliance tagging.
+</details>
 
-## Large PDFs (>30 pages)
+## 📁 Project structure
 
-Documents over 30 pages are automatically split into chunks and processed in sequence. Results are merged transparently.
+```text
+mistral-document-ai/
+├─ app.py                 # Streamlit multipage UI: Compare (parallel two-model) / Feature matrix
+├─ src/extract.py         # Core OCR client (async, REST, multi-model)
+├─ demo_ocr.ipynb         # Jupyter notebook walkthrough
+├─ scripts/               # deploy_all · setup_env · generate_sample_pdf
+├─ .streamlit/config.toml # Azure × Mistral whole-UI theme
+├─ docs/                  # README screenshots
+├─ data/                  # your PDFs
+└─ extraction/            # OCR output (markdown, CSV, JSON)
+```
 
-## Requirements
+## 📚 Resources
 
-- Python 3.12+
-- **Streamlit >= 1.58** (latest GA) for the web UI — `numpy >= 2` with `pandas >= 2.2.2,<3`
-- **Microsoft Azure subscription** with a [Microsoft Foundry](https://learn.microsoft.com/azure/ai-services/) account
-- Mistral Document AI models deployed via `scripts/deploy_all.ps1` / `scripts/deploy_all.sh`
-- `az` CLI logged in (`az login`)
-- `uv` package manager (or `pip install -e .`)
+- 📘 [Document AI — Overview](https://docs.mistral.ai/capabilities/document_ai) · [OCR Processor](https://docs.mistral.ai/capabilities/document_ai/basic_ocr) · [Annotations](https://docs.mistral.ai/capabilities/document_ai/annotations) · [Document Q&A](https://docs.mistral.ai/capabilities/document_ai/document_qna) · [OCR API Reference](https://docs.mistral.ai/api/endpoint/ocr)
+- ☁️ [OCR 4.0 — Azure Model Card](https://ai.azure.com/catalog/models/mistral-ocr-4-0) · [v25.12 — Azure Model Card](https://ai.azure.com/explore/models/mistral-document-ai-2512/version/1/registry/azureml-mistral)
+- 📣 [OCR 4 & Mistral Medium 3.5 arrive in Microsoft Foundry](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/mistral-document-ai-with-ocr-4-and-mistral-medium-3-5-arrive-in-microsoft-foundr/4529863) · [Mistral OCR 4 announcement](https://mistral.ai/news/ocr-4/)
+- 🧑‍🍳 Cookbooks: [Structured outputs](https://colab.research.google.com/github/mistralai/cookbook/blob/main/mistral/ocr/data_extraction.ipynb) · [Tool use](https://colab.research.google.com/github/mistralai/cookbook/blob/main/mistral/ocr/tool_usage.ipynb) · [Batch OCR](https://colab.research.google.com/github/mistralai/cookbook/blob/main/mistral/ocr/batch_ocr.ipynb)
+
+## ✅ Requirements
+
+- Python **3.12+**, **Streamlit ≥ 1.58**, `numpy ≥ 2`, `pandas ≥ 2.2.2,<3`
+- **Microsoft Azure** subscription with a [Microsoft Foundry](https://learn.microsoft.com/azure/ai-services/) account
+- Mistral Document AI models deployed via `scripts/deploy_all.*`
+- `az` CLI logged in (`az login`) · `uv` package manager (or `pip install -e .`)
+
+> 📦 **Large PDFs (> 30 pages)** are automatically split into chunks and processed in sequence — results are merged transparently.
