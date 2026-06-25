@@ -154,6 +154,24 @@ def _split_pdf_bytes(pdf_data: bytes, max_pages: int = 30) -> list[str]:
     return chunks
 
 
+def _retry_after_seconds(response: httpx.Response, *, fallback: float, cap: float = 30.0) -> float:
+    """Honor an HTTP ``Retry-After`` header (integer seconds) when present.
+
+    Azure gateways return ``Retry-After`` on throttling/capacity responses
+    (408/429/503). We respect an integer-second value (capped) and otherwise
+    fall back to the caller's exponential backoff.
+    """
+    raw = (response.headers.get("retry-after") or "").strip()
+    if raw.isdigit():
+        return min(float(raw), cap)
+    return fallback
+
+
+# Transient HTTP statuses worth retrying with backoff: 408 (request timeout,
+# common on the slower v25.12 model), 429 (throttling) and 5xx (capacity).
+RETRYABLE_STATUS: tuple[int, ...] = (408, 429, 500, 502, 503, 504)
+
+
 # ---------------------------------------------------------------------------
 # Core OCR function
 # ---------------------------------------------------------------------------
@@ -351,9 +369,16 @@ async def ocr_pdf(
                 except httpx.HTTPStatusError as e:
                     last_error = e
                     status = e.response.status_code
-                    if status in (429, 500, 502, 503, 504):
-                        wait = 2 ** attempt
-                        logger.warning(f"OCR {status}, retrying in {wait}s...")
+                    # Transient gateway/model errors: 408 (request timeout),
+                    # 429 (throttling), 5xx (capacity). The older v25.12 model is
+                    # slower and can return 408 on a heavy document while OCR 4.0
+                    # succeeds, so retry these with backoff instead of failing.
+                    if status in RETRYABLE_STATUS:
+                        wait = _retry_after_seconds(e.response, fallback=2 ** attempt)
+                        logger.warning(
+                            f"OCR {status}, retrying in {wait}s "
+                            f"(attempt {attempt}/{max_retries})..."
+                        )
                         await asyncio.sleep(wait)
                     else:
                         raise

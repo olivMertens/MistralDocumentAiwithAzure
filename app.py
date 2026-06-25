@@ -526,6 +526,41 @@ def _run_ocr_for(mk: str, src_pdf: bytes, name: str, opts: dict, progress_cb=Non
         tmp_path.unlink(missing_ok=True)
 
 
+def _humanize_ocr_error(msg: str) -> tuple[str, str]:
+    """Turn a raw OCR exception string into (plain-language summary, detail).
+
+    Transient gateway errors (408/429/5xx) are retried automatically in
+    ``src/extract.py``; when one still surfaces we explain it in plain language
+    and tuck the raw message into an expandable detail so the column stays clean.
+    """
+    low = msg.lower()
+    if "408" in low or "timeout" in low or "timed out" in low:
+        summary = (
+            "Request timed out (HTTP 408). This model is slower under load and the "
+            "Azure gateway closed the request before it finished \u2014 it was retried "
+            "automatically. Run the comparison again if it persists; the other "
+            "model's results are still shown."
+        )
+    elif "429" in low or "throttl" in low or "rate limit" in low:
+        summary = (
+            "The endpoint is throttling requests (HTTP 429). Wait a few seconds and "
+            "run the comparison again."
+        )
+    elif any(code in low for code in ("503", "502", "504", "500")) or "capacity" in low:
+        summary = (
+            "The model is temporarily unavailable (server/capacity error). It was "
+            "retried automatically \u2014 try again shortly."
+        )
+    elif "401" in low or "403" in low or "unauthor" in low or "forbidden" in low:
+        summary = (
+            "Authentication failed. Check the endpoint and API key in the sidebar "
+            "**Connection** panel."
+        )
+    else:
+        return msg, ""
+    return summary, msg
+
+
 def _render_comparison(cmp: dict, name: str, pdf_bytes: bytes = b"", table_format=None) -> None:
     """Side-by-side OCR 4.0 vs v25.12 with a per-model deep dive."""
     st.markdown("---")
@@ -548,7 +583,11 @@ def _render_comparison(cmp: dict, name: str, pdf_bytes: bytes = b"", table_forma
                 unsafe_allow_html=True,
             )
             if not entry.get("ok"):
-                st.error(f"\u274c {entry.get('error', 'unknown error')}")
+                summary, detail = _humanize_ocr_error(entry.get("error", "unknown error"))
+                st.error(f"\u274c {summary}")
+                if detail:
+                    with st.expander("Technical details"):
+                        st.code(detail)
                 stats_by_model[mk] = {}
                 continue
             res: OCRResult = entry["result"]
