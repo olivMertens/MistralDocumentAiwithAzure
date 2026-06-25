@@ -3,8 +3,8 @@
 [theme]
 base = "light"
 primaryColor = "#0078D4"             # Azure blue — primary actions
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F3F7FB" # azure-tinted surfaces
+backgroundColor = "#F3F8FE"          # whole-app body: light azure tint
+secondaryBackgroundColor = "#E8F1FB" # azure-tinted surfaces (cards, inputs)
 textColor = "#1B1F24"
 linkColor = "#0067C0"
 font = "sans serif"
@@ -16,3 +16,7 @@ borderColor = "#E2E8F0"
 backgroundColor = "#F4F8FC"
 secondaryBackgroundColor = "#E8F1FB"
 borderColor = "#D6E4F0"
+
+[client]
+# Hide the "Deploy" button + dev menu in the top-right toolbar
+toolbarMode = "minimal"

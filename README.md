@@ -1,4 +1,4 @@
-# Mistral Document AI · OCR 4.0 — OCR demo on Microsoft Foundry
+# Mistral Document AI on Azure — OCR 4.0 vs v25.12 (OCR demo on Microsoft Foundry)
 
 Standalone, self-contained project demonstrating **Mistral Document AI** OCR deployed and served through **Microsoft Foundry**.
 
@@ -90,8 +90,8 @@ mistral-document-ai/
   pyproject.toml              # uv / pip dependencies (Streamlit >= 1.58)
   .env.example                # Configuration template
   .streamlit/
-    config.toml               # Azure + Mistral brand theme
-  app.py                      # Streamlit UI (branded, sample viewer, live model compare)
+    config.toml               # Azure + Mistral whole-UI theme (+ toolbarMode minimal)
+  app.py                      # Streamlit multipage UI: Extract / Compare models / Model comparison
   demo_ocr.ipynb              # Jupyter notebook walkthrough
   src/
     extract.py                # Core OCR client (async, REST, multi-model)
@@ -192,34 +192,46 @@ uv run streamlit run app.py
 > Requires **Streamlit >= 1.58** (latest GA). The pin lives in `pyproject.toml`; run `uv sync`
 > (or `pip install -e .`) to upgrade an existing environment.
 
-A **custom-branded** web app themed with the **Microsoft Azure** (`#0078D4`) and **Mistral AI**
-(flame `#FF6A13`) palettes — the two technologies on display — via `.streamlit/config.toml` plus
-targeted CSS. The headline features **Mistral OCR 4.0**, with **v25.12** as the GA comparison baseline.
+A **custom-branded, multipage** web app that compares **two** Mistral Document AI models —
+**OCR 4.0** and **v25.12** — side by side on Microsoft Foundry. The **whole UI** is themed with the
+**Microsoft Azure** (`#0078D4`) and **Mistral AI** (flame `#FF6A13`) palettes via
+`.streamlit/config.toml` (tinted app background + branded sidebar) plus targeted CSS. The top-bar
+**Deploy** button and developer menu are hidden (`[client] toolbarMode = "minimal"`).
 
-Highlights:
+#### Navigation (left sidebar)
 
-- **Branded hero header** — Azure → Mistral gradient lockup, active-model caption.
+Built with **`st.navigation`** (the current Streamlit multipage pattern) — three logical pages:
+
+| Page | Purpose |
+|------|---------|
+| 🔍 **Extract** | Run a **single** model (OCR 4.0 *or* v25.12) and explore the full result — overview, markdown, tables, images, per-page, annotations, raw JSON. |
+| ⚖️ **Compare models** | Run **both** models on the same PDF and compare them **side by side**. |
+| 📊 **Model comparison** | Static **feature / limits / parameters / pricing** reference (moved out of the viewport into its own page). |
+
+Shared **Connection** (endpoint + key) and collapsible **OCR options** (model, advanced extraction,
+OCR 4.0 features, annotations) live in the sidebar and persist as you switch pages.
+
+#### Highlights
+
+- **Branded page heroes** — each page has an Azure → Mistral gradient hero that makes the two-model
+  comparison explicit.
 - **Sample document viewer** — when you upload or pick a PDF, the app shows it inline in a native
   **`st.pdf`** viewer (Streamlit's built-in PDF component — no rasterization, no extra image libs)
   plus lightweight badges (page count, file size, and a `>30 pages → auto-chunked` hint) *before*
   extraction, so you can gauge how complex the document is.
-- **⚖️ Live side-by-side comparison** — one click runs **both** OCR 4.0 **and** v25.12 on the same
-  document and shows two columns: per-model metrics (latency, pages, words, tables, images,
-  sections, blocks, confidence), scrollable rendered markdown, and per-result download, plus a
+- **⚖️ Live side-by-side comparison** — on the **Compare models** page, one click runs **both**
+  OCR 4.0 **and** v25.12 and shows two columns: per-model metrics (latency, pages, words, tables,
+  images, sections, blocks, confidence), scrollable rendered markdown, per-result download, and a
   consolidated diff table. Each model runs in its own `try/except`, so if OCR 4.0 is temporarily
   unavailable (Preview 503), the v25.12 column still renders.
-- **Model selector** — switch between OCR 4.0 and v25.12 for a single-model deep dive.
-- PDF upload or pick from `data/`.
-- Rendered markdown with a raw-source toggle.
-- Table extraction with filtering, DataFrame display, and CSV download.
-- Image viewer with base64 rendering in a grid layout.
-- Per-page breakdown with word counts, headers, footers.
-- **Annotations tab**: bbox annotations (per image) and document-level annotations.
-- v25.12 / OCR 4.0 controls: `table_format`, `extract_header`, `extract_footer`.
-- OCR 4.0 controls: content blocks + bounding boxes (`include_blocks`), inline confidence scores
-  (`confidence_scores_granularity`).
-- Save results to `extraction/` (markdown, CSV, JSON).
-- Extraction history in the sidebar.
+- **Extract page** — rendered markdown with a raw-source toggle; table extraction with filtering,
+  DataFrame display, and CSV download; image grid (base64); per-page breakdown with word counts,
+  headers, footers; **Annotations** (bbox per-image + document-level); raw JSON; and save to
+  `extraction/` (markdown, CSV, JSON).
+- **OCR options** (sidebar): `table_format`, `extract_header`, `extract_footer`, `pages`,
+  `image_limit`; OCR 4.0-only content blocks + bounding boxes (`include_blocks`) and inline
+  confidence scores (`confidence_scores_granularity`).
+- **Extraction history** in the sidebar.
 
 ## Authentication
 
