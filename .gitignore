@@ -26,6 +26,11 @@ Thumbs.db
 # Data & extraction outputs
 data/*.pdf
 !data/sample_complex_report.pdf
+# Bundled language sample sets (handwritten FR/EN) ship with the repo
+!data/FR/
+!data/EN/
+!data/FR/*.pdf
+!data/EN/*.pdf
 extraction/*.md
 extraction/*.json
 extraction/*.csv

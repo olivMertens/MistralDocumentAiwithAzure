@@ -24,6 +24,47 @@ from src.extract import ocr_pdf, OCRResult, get_deployment_name, _pydantic_to_mi
 MAX_FILE_SIZE_MB = 30
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
+# ---------------------------------------------------------------------------
+# Bundled sample library — data/ root + language subfolders (data/FR, data/EN)
+# ---------------------------------------------------------------------------
+SAMPLE_CATEGORY_LABELS = {
+    "Samples": "\U0001f9ea Generated sample",
+    "FR": "\U0001f1eb\U0001f1f7 Fran\u00e7ais \u2014 handwritten",
+    "EN": "\U0001f1ec\U0001f1e7 English \u2014 handwritten",
+}
+SAMPLE_CATEGORY_ORDER = {"Samples": 0, "FR": 1, "EN": 2}
+SAMPLE_DOC_LABELS = {
+    "sample_complex_report.pdf": "Synthetic complex report \u2014 tables, charts, mixed layout",
+    "fr_lettre_victor_hugo_1827.pdf": "Victor Hugo \u2014 lettre autographe (1827)",
+    "fr_lettre_niepce_administration.pdf": "Nic\u00e9phore Ni\u00e9pce \u2014 lettre manuscrite \u00e0 l\u2019administration",
+    "en_letter_to_wife.pdf": "W. L. Garrison \u2014 handwritten letter to his wife",
+    "en_letter_to_friend.pdf": "W. L. Garrison \u2014 handwritten letter to a friend",
+    "en_letter_respected_sir.pdf": "W. L. Garrison \u2014 handwritten letter, \u201cRespected Sir\u201d",
+}
+
+
+def _discover_samples() -> dict[str, list[Path]]:
+    """Group bundled PDFs by category: data/ root -> 'Samples', each subfolder -> its name."""
+    data_dir = Path("data")
+    groups: dict[str, list[Path]] = {}
+    if not data_dir.exists():
+        return groups
+    root_pdfs = sorted(data_dir.glob("*.pdf"))
+    if root_pdfs:
+        groups["Samples"] = root_pdfs
+    for sub in sorted(p for p in data_dir.iterdir() if p.is_dir()):
+        pdfs = sorted(sub.glob("*.pdf"))
+        if pdfs:
+            groups[sub.name] = pdfs
+    return dict(
+        sorted(groups.items(), key=lambda kv: (SAMPLE_CATEGORY_ORDER.get(kv[0], 9), kv[0]))
+    )
+
+
+def _sample_doc_label(name: str) -> str:
+    """Human-friendly label for a bundled sample filename."""
+    return SAMPLE_DOC_LABELS.get(name, name)
+
 
 def _validate_upload(data: bytes, filename: str) -> str | None:
     """Return an error message if the uploaded file is invalid, else None."""
@@ -663,22 +704,35 @@ def file_input() -> tuple[bytes | None, str]:
             help=f"PDF format \u2014 max {MAX_FILE_SIZE_MB} MB per file",
         )
     with col2:
-        data_dir = Path("data")
-        local_pdfs = sorted(data_dir.glob("*.pdf")) if data_dir.exists() else []
-        local_choice = st.selectbox(
-            "Or select from data/",
-            options=["(none)"] + [p.name for p in local_pdfs],
-            key="in_local_choice",
+        groups = _discover_samples()
+        cat_keys = list(groups.keys())
+        category = st.selectbox(
+            "Or pick a sample \u00b7 category",
+            options=["(none)"] + cat_keys,
+            format_func=lambda k: "(none)" if k == "(none)" else SAMPLE_CATEGORY_LABELS.get(k, k),
+            key="in_sample_cat",
+            help="Bundled public-domain documents grouped by language \u2014 pick one to load it.",
         )
+        sample_path: Path | None = None
+        if category != "(none)":
+            files = groups[category]
+            doc = st.selectbox(
+                f"{SAMPLE_CATEGORY_LABELS.get(category, category)} \u00b7 document",
+                options=["(none)"] + [p.name for p in files],
+                format_func=lambda n: "(none)" if n == "(none)" else _sample_doc_label(n),
+                key=f"in_sample_doc_{category}",
+            )
+            if doc != "(none)":
+                sample_path = next((p for p in files if p.name == doc), None)
 
     pdf_bytes: bytes | None = None
     pdf_name = ""
     if uploaded_file is not None:
         pdf_bytes = uploaded_file.read()
         pdf_name = uploaded_file.name
-    elif local_choice and local_choice != "(none)":
-        pdf_bytes = (Path("data") / local_choice).read_bytes()
-        pdf_name = local_choice
+    elif sample_path is not None:
+        pdf_bytes = sample_path.read_bytes()
+        pdf_name = sample_path.name
 
     if pdf_bytes:
         validation_error = _validate_upload(pdf_bytes, pdf_name)

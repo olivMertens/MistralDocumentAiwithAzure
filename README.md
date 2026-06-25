@@ -103,6 +103,7 @@ Built with **`st.navigation`** — two focused pages:
 - 📊 **Side‑by‑side summary** — per‑model metrics (pages, words, tables, images, blocks, latency) + a consolidated **diff table**.
 - 🔎 **Per‑model deep dive** — a tab per model (🟠 OCR 4.0 / 🔵 v25.12): rendered markdown, table extraction + CSV, image grid, per‑page breakdown (incl. blocks + inline confidence), annotations, and raw JSON.
 - 👀 **Native PDF viewer** — the selected document is shown inline via `st.pdf` *before* extraction, with page‑count / size badges and a `>30 pages → auto‑chunked` hint.
+- 🗂️ **Bundled sample library** — a category → document picker (single‑select) with public‑domain **handwritten** documents grouped by language: 🇫🇷 *Français* (Victor Hugo & Nicéphore Niépce autograph letters) and 🇬🇧 *English* (W. L. Garrison letters), plus a synthetic complex report.
 - 🔌 **Shared sidebar** — Connection (**endpoint + API key, both required**) and collapsible OCR options that persist across pages.
 
 <div align="center">
@@ -267,7 +268,7 @@ mistral-document-ai/
 ├─ scripts/               # deploy_all · setup_env · generate_sample_pdf
 ├─ .streamlit/config.toml # Azure × Mistral whole-UI theme
 ├─ docs/                  # README screenshots
-├─ data/                  # your PDFs
+├─ data/                  # PDFs — bundled FR/EN handwritten samples + your own
 └─ extraction/            # OCR output (markdown, CSV, JSON)
 ```
 
