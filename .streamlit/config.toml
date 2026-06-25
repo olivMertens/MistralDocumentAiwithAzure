@@ -20,3 +20,11 @@ borderColor = "#D6E4F0"
 [client]
 # Hide the "Deploy" button + dev menu in the top-right toolbar
 toolbarMode = "minimal"
+
+[server]
+# Match the real Mistral Document AI limit on Azure Foundry: both
+# mistral-ocr-4-0 and mistral-document-ai-2512 accept max 30 MB / 30 pages per
+# request. Capping the uploader here makes the browser reject oversized files
+# up front (instead of Streamlit's misleading 200 MB default) and keeps the
+# widget label in sync with _validate_upload / the Feature matrix page.
+maxUploadSize = 30
