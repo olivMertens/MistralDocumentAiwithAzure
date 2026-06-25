@@ -79,6 +79,52 @@ def _validate_upload(data: bytes, filename: str) -> str | None:
     return None
 
 
+def _decode_image_bytes(b64: str) -> bytes | None:
+    """Decode an OCR ``image_base64`` value into raw image bytes.
+
+    Mistral Document AI returns images as **data URIs**
+    (e.g. ``data:image/jpeg;base64,/9j/4AAQ...``). The ``data:<mime>;base64,``
+    prefix must be stripped before decoding, otherwise the base64 payload is
+    corrupt and Pillow raises ``UnidentifiedImageError``. Returns ``None`` on any
+    failure so the caller can degrade gracefully instead of crashing.
+    """
+    if not b64:
+        return None
+    payload = b64.strip()
+    if payload.startswith("data:"):
+        payload = payload.split(",", 1)[-1].strip()
+    payload += "=" * (-len(payload) % 4)  # restore stripped padding
+    try:
+        return base64.b64decode(payload)
+    except Exception:
+        return None
+
+
+def _inline_markdown_images(markdown: str, images: list[dict]) -> str:
+    """Rewrite ``![alt](img-id)`` refs to inline data URIs so images render.
+
+    OCR markdown references extracted images by id (``![img-0.jpeg](img-0.jpeg)``),
+    which show as broken links in ``st.markdown``. When the matching base64 is
+    available we swap the ref for a ``data:`` URI so the picture renders inline.
+    """
+    if not images:
+        return markdown
+    by_id: dict[str, str] = {}
+    for img in images:
+        ref = img.get("id")
+        b64 = img.get("image_base64") or img.get("base64") or ""
+        if ref and b64:
+            by_id[ref] = b64 if b64.startswith("data:") else f"data:image/jpeg;base64,{b64}"
+    if not by_id:
+        return markdown
+
+    def _sub(m: re.Match) -> str:
+        alt, ref = m.group(1), m.group(2)
+        return f"![{alt}]({by_id.get(ref, ref)})"
+
+    return re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", _sub, markdown)
+
+
 def _get_page_count(data: bytes) -> int | None:
     """Return page count of a PDF, or None on failure."""
     try:
@@ -89,6 +135,64 @@ def _get_page_count(data: bytes) -> int | None:
         return count
     except Exception:
         return None
+
+
+def _analyze_pdf(data: bytes) -> dict:
+    """Cheap heuristics about a PDF used to pick smart OCR defaults.
+
+    Samples up to the first 5 pages and measures how many carry an embedded text
+    layer. A low ratio means the document is scanned / handwritten (image-only),
+    which calls for different OCR options than a born-digital PDF.
+    """
+    info: dict = {"pages": None, "text_ratio": None, "scanned": None}
+    try:
+        import fitz
+        doc = fitz.open(stream=data, filetype="pdf")
+        info["pages"] = doc.page_count
+        sample = min(doc.page_count, 5)
+        if sample:
+            with_text = sum(1 for i in range(sample) if (doc[i].get_text() or "").strip())
+            info["text_ratio"] = with_text / sample
+            info["scanned"] = info["text_ratio"] < 0.5
+        doc.close()
+    except Exception:
+        pass
+    return info
+
+
+def _recommend_ocr_settings(info: dict) -> tuple[dict, str]:
+    """Map a PDF analysis to recommended ``cfg_*`` widget values + a rationale."""
+    pages = info.get("pages")
+    scanned = info.get("scanned")
+    rec: dict = {"cfg_include_images": True, "cfg_include_blocks": True}
+    if scanned:
+        rec.update({
+            "cfg_table_format": "(none)",
+            "cfg_extract_header": False,
+            "cfg_extract_footer": False,
+            "cfg_confidence": "page",
+        })
+        why = (
+            "scanned / handwritten document (image-only pages) \u2014 enabling **content "
+            "blocks + bounding boxes** and **page confidence** (OCR 4.0) for layout & QA; "
+            "tables and header/footer extraction left off."
+        )
+    elif scanned is False:
+        rec.update({
+            "cfg_table_format": "markdown",
+            "cfg_extract_header": True,
+            "cfg_extract_footer": True,
+            "cfg_confidence": "off",
+        })
+        why = (
+            "born-digital document with a text layer \u2014 enabling **markdown tables** and "
+            "**header/footer extraction**, plus OCR 4.0 **content blocks**."
+        )
+    else:
+        why = "enabling image extraction and OCR 4.0 **content blocks** (document type unknown)."
+    if pages and pages > 8:
+        why += f" Annotations, if enabled, cover only the first 8 of {pages} pages."
+    return rec, why
 
 
 def _parse_pages_input(text: str) -> list[int] | None:
@@ -580,8 +684,21 @@ def render_ocr_options() -> dict:
     """
     opts: dict = {}
     with st.sidebar:
+        pending = st.session_state.pop("_ocr_preset", None)
+        if pending:
+            for k, v in pending.items():
+                st.session_state[k] = v
+        # Seed defaults in session_state (instead of widget `value=`/`index=`) so
+        # the auto-tune preset can set the same keys without Streamlit warning
+        # about a default-plus-Session-State conflict.
+        for _k, _v in {
+            "cfg_include_images": True,
+            "cfg_include_blocks": False,
+            "cfg_confidence": "off",
+        }.items():
+            st.session_state.setdefault(_k, _v)
         opts["include_images"] = st.checkbox(
-            "Include image extraction", value=True, key="cfg_include_images"
+            "Include image extraction", key="cfg_include_images"
         )
 
         with st.expander("\u2699\ufe0f Advanced extraction", expanded=False):
@@ -624,7 +741,6 @@ def render_ocr_options() -> dict:
             st.caption("These apply to the **OCR 4.0** column of the comparison.")
             opts["include_blocks"] = st.checkbox(
                 "Content blocks + bounding boxes",
-                value=False,
                 key="cfg_include_blocks",
                 help=(
                     "OCR 4.0 only. Paragraph-level blocks with bounding boxes and type "
@@ -635,7 +751,6 @@ def render_ocr_options() -> dict:
             opts["confidence_granularity"] = st.selectbox(
                 "Confidence scores",
                 options=["off", "page", "word"],
-                index=0,
                 key="cfg_confidence",
                 help=(
                     "OCR 4.0 only. Inline confidence per page or per word for "
@@ -759,6 +874,23 @@ def file_input() -> tuple[bytes | None, str]:
             )
             _render_sample_preview(pdf_bytes)
 
+        # Smart defaults: analyse the validated PDF and auto-apply the most
+        # logical OCR options once per document (sidebar stays overridable).
+        info = _analyze_pdf(pdf_bytes)
+        rec, why = _recommend_ocr_settings(info)
+        auto_key = f"{pdf_name}:{len(pdf_bytes)}"
+        if rec and st.session_state.get("_auto_tuned_for") != auto_key:
+            st.session_state["_ocr_preset"] = rec
+            st.session_state["_auto_tuned_for"] = auto_key
+            st.session_state["_auto_tuned_why"] = why
+            st.rerun()
+        if st.session_state.get("_auto_tuned_for") == auto_key:
+            st.success(
+                "\u2728 **Auto-tuned OCR settings** for this document \u2014 "
+                + st.session_state.get("_auto_tuned_why", why)
+                + " _Adjust anything in the sidebar to override._"
+            )
+
     return pdf_bytes, pdf_name
 
 
@@ -879,7 +1011,7 @@ def render_result_detail(result, pdf_name, pdf_bytes_display=b"", table_format=N
             key=f"{key}_md_view",
         )
         if view_mode == "Rendered":
-            st.markdown(result.markdown)
+            st.markdown(_inline_markdown_images(result.markdown, result.images))
         else:
             st.code(result.markdown, language="markdown")
         st.download_button(
@@ -985,8 +1117,16 @@ def render_result_detail(result, pdf_name, pdf_bytes_display=b"", table_format=N
                     b64 = img.get("image_base64") or img.get("base64", "")
                     with img_cols[col_idx]:
                         st.markdown(f"**{img_id}** (page {page})")
-                        if b64:
-                            st.image(base64.b64decode(b64), caption=img_id, width="stretch")
+                        raw = _decode_image_bytes(b64)
+                        if raw:
+                            try:
+                                st.image(raw, caption=img_id, width="stretch")
+                            except Exception as exc:
+                                st.caption(
+                                    f"\u26a0\ufe0f Couldn't render {img_id} ({type(exc).__name__})."
+                                )
+                        elif b64:
+                            st.caption("\u26a0\ufe0f Image data couldn't be decoded.")
                         else:
                             st.caption("No base64 image data available.")
                         meta_keys = {
