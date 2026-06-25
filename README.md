@@ -91,7 +91,7 @@ mistral-document-ai/
   .env.example                # Configuration template
   .streamlit/
     config.toml               # Azure + Mistral whole-UI theme (+ toolbarMode minimal)
-  app.py                      # Streamlit multipage UI: Compare (parallel two-model) / Model comparison
+  app.py                      # Streamlit multipage UI: Compare (parallel two-model) / Feature matrix
   demo_ocr.ipynb              # Jupyter notebook walkthrough
   src/
     extract.py                # Core OCR client (async, REST, multi-model)
@@ -206,7 +206,7 @@ Built with **`st.navigation`** (the current Streamlit multipage pattern) — two
 | Page | Purpose |
 |------|---------|
 | ⚖️ **Compare** *(default)* | Upload one PDF, then run **both** OCR 4.0 **and** v25.12 on it **in parallel** and explore both results in the viewport. |
-| 📊 **Model comparison** | Static **feature / limits / parameters / pricing** reference (moved out of the viewport into its own page). |
+| 📊 **Feature matrix** | Static **capability / limits / parameters / pricing** matrix comparing the two models (no document run — that lives on **Compare**). |
 
 There is **no single-model selector** — the app always runs both models, because comparing them *is*
 the point. The sidebar holds a shared **Connection** (endpoint + API key, **both required**) and
