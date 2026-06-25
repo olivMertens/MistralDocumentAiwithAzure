@@ -158,7 +158,7 @@ uv sync                          # install all dependencies
 ### 4. Generate Sample PDF (Optional)
 
 ```bash
-uv sync --group scripts          # installs matplotlib for chart generation
+uv sync --extra scripts          # installs matplotlib for chart generation
 uv run python scripts/generate_sample_pdf.py
 ```
 
@@ -177,7 +177,7 @@ Results (markdown + metadata JSON + CSVs) appear in `extraction/`.
 ### 6. Jupyter Notebook
 
 ```bash
-uv sync --group notebook
+uv sync --extra notebook
 uv run jupyter lab demo_ocr.ipynb
 ```
 
@@ -199,9 +199,10 @@ targeted CSS. The headline features **Mistral OCR 4.0**, with **v25.12** as the 
 Highlights:
 
 - **Branded hero header** — Azure → Mistral gradient lockup, active-model caption.
-- **Sample complexity viewer** — when you upload or pick a PDF, the app renders **page thumbnails**
-  (PyMuPDF) plus **complexity badges** (page count, estimated tables/images, file size) *before*
-  extraction, so you can gauge how hard the document is.
+- **Sample document viewer** — when you upload or pick a PDF, the app shows it inline in a native
+  **`st.pdf`** viewer (Streamlit's built-in PDF component — no rasterization, no extra image libs)
+  plus lightweight badges (page count, file size, and a `>30 pages → auto-chunked` hint) *before*
+  extraction, so you can gauge how complex the document is.
 - **⚖️ Live side-by-side comparison** — one click runs **both** OCR 4.0 **and** v25.12 on the same
   document and shows two columns: per-model metrics (latency, pages, words, tables, images,
   sections, blocks, confidence), scrollable rendered markdown, and per-result download, plus a
