@@ -272,87 +272,25 @@ def run_async(coro):
         loop.close()
 
 
-@st.cache_data(show_spinner=False)
-def _pdf_page_png(data: bytes, page_index: int, zoom: float = 0.55) -> bytes | None:
-    """Render a single PDF page to a PNG thumbnail (cached by content)."""
-    try:
-        import fitz
-
-        doc = fitz.open(stream=data, filetype="pdf")
-        pix = doc[page_index].get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
-        png = pix.tobytes("png")
-        doc.close()
-        return png
-    except Exception:
-        return None
-
-
-@st.cache_data(show_spinner=False)
-def _pdf_complexity(data: bytes) -> dict:
-    """Heuristic complexity profile of a PDF (cached by content)."""
-    try:
-        import fitz
-
-        doc = fitz.open(stream=data, filetype="pdf")
-        n = len(doc)
-        sample = min(n, 8)
-        images = words = drawings = 0
-        for i in range(sample):
-            pg = doc[i]
-            images += len(pg.get_images(full=True))
-            words += len(pg.get_text("words"))
-            try:
-                drawings += len(pg.get_drawings())
-            except Exception:
-                pass
-        doc.close()
-        avg_words = words // max(sample, 1)
-        return {
-            "pages": n,
-            "avg_words": avg_words,
-            "images": images,
-            "vectors": drawings,
-            "density": (
-                "Dense text" if avg_words > 600
-                else "Moderate text" if avg_words > 250
-                else "Light text"
-            ),
-        }
-    except Exception:
-        return {}
-
-
-def _render_sample_preview(data: bytes, max_thumbs: int = 6) -> None:
-    """Show page thumbnails + complexity badges for the selected document."""
-    cx = _pdf_complexity(data)
-    if not cx:
-        st.caption("Preview not available for this file.")
-        return
-    n = cx["pages"]
-    badges = [
-        f'<span class="cx-badge">{n} page(s)</span>',
-        f'<span class="cx-badge">{cx["density"]} · ~{cx["avg_words"]} words/page</span>',
-    ]
-    if cx["images"]:
-        badges.append(f'<span class="cx-badge mistral">{cx["images"]}+ embedded image(s)</span>')
-    if cx["vectors"] > 40:
-        badges.append('<span class="cx-badge mistral">Rich vector graphics</span>')
-    if n > 30:
-        badges.append('<span class="cx-badge warn">⚡ auto-chunked (&gt;30 pages)</span>')
+def _render_sample_preview(data: bytes) -> None:
+    """Show the selected document in a native PDF viewer with quick complexity badges."""
+    pages = _get_page_count(data)
+    size = (
+        f"{len(data) / 1024:.0f} KB"
+        if len(data) < 1024 * 1024
+        else f"{len(data) / (1024 * 1024):.1f} MB"
+    )
+    badges: list[str] = []
+    if pages:
+        badges.append(f'<span class="cx-badge">{pages} page(s)</span>')
+    badges.append(f'<span class="cx-badge">{size}</span>')
+    if pages and pages > 30:
+        badges.append('<span class="cx-badge warn">auto-chunked (&gt;30 pages)</span>')
     st.markdown('<div class="cx-badges">' + "".join(badges) + "</div>", unsafe_allow_html=True)
-
-    thumb_count = min(n, max_thumbs)
-    ncols = min(thumb_count, 3) or 1
-    cols = st.columns(ncols)
-    for i in range(thumb_count):
-        png = _pdf_page_png(data, i)
-        with cols[i % ncols]:
-            if png:
-                st.image(png, caption=f"Page {i + 1}", width="stretch")
-            else:
-                st.caption(f"Page {i + 1}: preview failed")
-    if n > thumb_count:
-        st.caption(f"… and {n - thumb_count} more page(s) — showing the first {thumb_count}.")
+    try:
+        st.pdf(data, height=480)
+    except Exception:
+        st.caption("Inline preview unavailable - use the download button to open the PDF.")
 
 
 def _build_annotation_params():
